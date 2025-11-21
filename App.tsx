@@ -116,6 +116,7 @@ export default function App() {
           ticketNumber: ticketNumber,
           qrContent: qrContent,
           department: row[COL_DEPT]?.trim() || '',
+          provider: row[COL_PROVIDER]?.trim() || '', // New Field
           deviceName: row[COL_NAME]?.trim() || '',
           modelSerial: modelSerial,
           fullData: row
@@ -255,7 +256,12 @@ export default function App() {
           </div>
         ) : (
           /* Lookup View */
-          <LookupPage data={parsedData} />
+          <LookupPage 
+            data={parsedData} 
+            onReload={handleLoadData} 
+            isLoading={isLoading} 
+            lastUpdated={lastUpdated}
+          />
         )}
       </div>
     </div>

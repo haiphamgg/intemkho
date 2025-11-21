@@ -5,6 +5,7 @@ export interface DeviceRow {
   qrContent: string;    // Column S
   deviceName: string;   // Column H
   department: string;   // Column D
+  provider: string;     // Column C (New field)
   modelSerial: string;  // Column M
   fullData: string[];
 }

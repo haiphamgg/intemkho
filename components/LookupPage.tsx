@@ -1,15 +1,19 @@
+
 import React, { useState, useMemo } from 'react';
-import { Search, Package, Calendar, Tag, Layers, FileText, ExternalLink } from 'lucide-react';
+import { Search, Package, Calendar, Tag, FileText, ExternalLink, RefreshCw, Building2 } from 'lucide-react';
 import { DeviceRow } from '../types';
 
 interface LookupPageProps {
   data: DeviceRow[];
+  onReload: () => void;
+  isLoading: boolean;
+  lastUpdated: Date | null;
 }
 
 // ID của thư mục Google Drive chứa chứng từ
 const DRIVE_FOLDER_ID = '16khjeVK8e7evRXQQK7z9IJit4yCrO9f1';
 
-export const LookupPage: React.FC<LookupPageProps> = ({ data }) => {
+export const LookupPage: React.FC<LookupPageProps> = ({ data, onReload, isLoading, lastUpdated }) => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredData = useMemo(() => {
@@ -19,7 +23,8 @@ export const LookupPage: React.FC<LookupPageProps> = ({ data }) => {
       row.ticketNumber.toLowerCase().includes(lowerTerm) ||
       row.deviceName.toLowerCase().includes(lowerTerm) ||
       row.modelSerial.toLowerCase().includes(lowerTerm) ||
-      row.department.toLowerCase().includes(lowerTerm)
+      row.department.toLowerCase().includes(lowerTerm) ||
+      row.provider.toLowerCase().includes(lowerTerm)
     );
   }, [data, searchTerm]);
 
@@ -42,15 +47,31 @@ export const LookupPage: React.FC<LookupPageProps> = ({ data }) => {
               <Package className="w-8 h-8" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-800">Tra cứu thiết bị</h2>
-              <p className="text-sm text-slate-500 mt-0.5">Tìm kiếm nhanh trong <span className="font-semibold text-indigo-600">{data.length}</span> bản ghi</p>
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-bold text-slate-800">Tra cứu thiết bị</h2>
+                
+                {/* REFRESH BUTTON ADDED */}
+                <button
+                  onClick={onReload}
+                  disabled={isLoading}
+                  className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-all active:scale-95 disabled:opacity-50"
+                  title="Cập nhật dữ liệu mới nhất"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin text-blue-600' : ''}`} />
+                </button>
+              </div>
+              <p className="text-sm text-slate-500 mt-0.5 flex items-center gap-2">
+                <span>{data.length} bản ghi</span>
+                <span className="text-slate-300">•</span>
+                <span className="text-xs">Cập nhật: {lastUpdated ? lastUpdated.toLocaleTimeString() : '--:--'}</span>
+              </p>
             </div>
           </div>
           
           <div className="relative w-full md:w-96 group">
             <input
               type="text"
-              placeholder="Tìm tên, model, số phiếu, khoa..."
+              placeholder="Tìm tên, model, số phiếu, nơi cung cấp..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-11 pr-4 py-3 border border-slate-200 bg-slate-50 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white focus:outline-none transition-all shadow-sm"
@@ -67,9 +88,10 @@ export const LookupPage: React.FC<LookupPageProps> = ({ data }) => {
             <thead className="text-xs text-slate-500 uppercase bg-slate-50/80 sticky top-0 z-10 backdrop-blur-sm">
               <tr>
                 <th className="px-6 py-4 font-bold border-b border-slate-200 w-[15%]">Số Phiếu</th>
-                <th className="px-6 py-4 font-bold border-b border-slate-200 w-[30%]">Thiết Bị</th>
-                <th className="px-6 py-4 font-bold border-b border-slate-200 w-[20%]">Model / Serial</th>
-                <th className="px-6 py-4 font-bold border-b border-slate-200 w-[20%]">Bộ Phận</th>
+                <th className="px-6 py-4 font-bold border-b border-slate-200 w-[25%]">Thiết Bị</th>
+                <th className="px-6 py-4 font-bold border-b border-slate-200 w-[15%]">Model / Serial</th>
+                <th className="px-6 py-4 font-bold border-b border-slate-200 w-[15%]">Nguồn / Nhà CC</th>
+                <th className="px-6 py-4 font-bold border-b border-slate-200 w-[15%]">Bộ Phận SD</th>
                 <th className="px-6 py-4 font-bold border-b border-slate-200 w-[15%] text-right">Ngày</th>
               </tr>
             </thead>
@@ -115,6 +137,17 @@ export const LookupPage: React.FC<LookupPageProps> = ({ data }) => {
                         <span className="text-slate-300 text-sm italic">N/A</span>
                       )}
                     </td>
+                    {/* NEW COLUMN: PROVIDER (Moved after Model/Serial) */}
+                    <td className="px-6 py-4 align-top">
+                      {row.provider ? (
+                        <div className="flex items-start gap-2 text-slate-700 text-sm">
+                          <Building2 className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                          <span>{row.provider}</span>
+                        </div>
+                      ) : (
+                         <span className="text-slate-300 text-sm italic">--</span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 align-top">
                       <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
@@ -133,7 +166,7 @@ export const LookupPage: React.FC<LookupPageProps> = ({ data }) => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center">
+                  <td colSpan={6} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center justify-center text-slate-400">
                       <div className="bg-slate-50 p-4 rounded-full mb-3">
                         <Search className="w-8 h-8 text-slate-300" />
