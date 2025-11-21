@@ -75,8 +75,20 @@ export default function App() {
           const labelProvider = isPX ? "Khoa phòng: " : "Nhà CC: ";
           const labelDate = isPX ? "Ngày cấp: " : "Ngày giao: ";
           
+          // Robust date formatter: Avoids `new Date()` implicit conversions which cause MM/DD inversion
           const formatDate = (d: string) => {
             if (!d) return "";
+            
+            // If already has slashes (e.g. 02/05/2024), assume it is visually correct from Sheet
+            if (d.includes('/')) return d;
+
+            // If ISO format YYYY-MM-DD
+            if (d.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                const [y, m, dPart] = d.split('-');
+                return `${dPart}/${m}/${y}`;
+            }
+
+            // Try standard parse as fallback for weird formats
             try {
                 const dateObj = new Date(d);
                 if (!isNaN(dateObj.getTime())) {

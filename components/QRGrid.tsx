@@ -164,14 +164,15 @@ export const QRGrid: React.FC<QRGridProps> = ({ items, selectedTicket }) => {
               >
                 {/* 
                   SECTION 1: Header 
-                  - Updated: Both Ticket Number and Department are now visually prominent.
-                  - Border bottom added for clarity.
+                  - Ticket Number: Large, Black
+                  - Department: Medium, Bold (Adjusted from previous request)
                 */}
-                <div className="w-full flex justify-between items-start border-b-2 border-slate-800 pb-1 mb-1 print:border-black min-h-[2.5rem] flex-none gap-2">
+                <div className="w-full flex justify-between items-center border-b-2 border-slate-800 pb-1 mb-1 print:border-black min-h-[2.5rem] flex-none gap-2">
                    <div className="text-lg font-black uppercase tracking-wider text-slate-900 print:text-xl leading-none text-left whitespace-nowrap">
                     {item.ticketNumber}
                    </div>
-                   <div className="text-lg font-black uppercase tracking-wider text-slate-900 print:text-xl leading-none text-right break-words flex-1">
+                   {/* Department: Adjusted to be visible but not overwhelming */}
+                   <div className="text-base font-bold uppercase text-slate-800 print:text-lg leading-none text-right break-words flex-1">
                     {item.department}
                    </div>
                 </div>
@@ -199,15 +200,14 @@ export const QRGrid: React.FC<QRGridProps> = ({ items, selectedTicket }) => {
 
                 {/* 
                   SECTION 3: Footer 
-                  Increased height to accommodate larger text.
                 */}
                 <div className="w-full border-t border-slate-200 pt-1 mt-1 flex flex-col items-center justify-center print:border-black min-h-[4rem] flex-none">
-                   {/* Device Name: Larger, allow 2 lines */}
+                   {/* Device Name */}
                    <div className="font-bold text-slate-900 text-lg leading-tight print:text-xl print:leading-tight line-clamp-2 flex items-center justify-center h-auto min-h-[2.5rem] w-full overflow-hidden px-1">
                     {item.deviceName || "Thiết bị"}
                   </div>
                   
-                  {/* Model/Serial: Larger font */}
+                  {/* Model/Serial */}
                   <div className="text-sm text-slate-600 font-mono truncate w-full print:text-base print:font-bold print:text-black h-6 flex items-center justify-center mt-0.5">
                     {item.modelSerial ? `${item.modelSerial}` : <span className="opacity-0">-</span>}
                   </div>

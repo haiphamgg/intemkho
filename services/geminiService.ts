@@ -1,12 +1,21 @@
 import { GoogleGenAI } from "@google/genai";
 import { DeviceRow } from "../types";
 
-// Update: Use process.env.API_KEY as per SDK guidelines.
-// This resolves the TS error regarding import.meta.env.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Remove global initialization to prevent crash on load if process.env is missing in browser
+// const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const analyzeTicketData = async (ticketId: string, items: DeviceRow[]): Promise<string> => {
   try {
+    // Initialize inside the function
+    // @ts-ignore - process.env is replaced by Vite at build time
+    const apiKey = process.env.API_KEY;
+    
+    if (!apiKey) {
+      return "Chưa cấu hình API Key.";
+    }
+
+    const ai = new GoogleGenAI({ apiKey: apiKey });
+
     const itemSummary = items.map(i => `- Device: ${i.deviceName} (QR: ${i.qrContent})`).join('\n');
     
     const prompt = `

@@ -7,10 +7,10 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      // Polyfill for libraries checking process.env.NODE_ENV or other process variables
-      'process.env': {}, 
-      // Specific replacement for the API KEY
+      // Only define the specific key needed to avoid breaking libraries checking "typeof process"
       'process.env.API_KEY': JSON.stringify(env.VITE_API_KEY || env.API_KEY),
+      // Fallback for other process.env access if strictly needed, but prefer specific keys
+      'process.env.NODE_ENV': JSON.stringify(mode),
     },
   };
 });
