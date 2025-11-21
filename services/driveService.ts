@@ -9,11 +9,20 @@ export const fetchDriveFiles = async (folderId: string): Promise<DriveFile[]> =>
     throw new Error("Chưa cấu hình ID thư mục");
   }
 
-  // Gọi đến Web App
-  const url = `${GAS_WEB_APP_URL}?folderId=${folderId}`;
+  // Thêm timestamp để tránh Browser Cache (Netlify/Chrome thường cache các request GET)
+  const timestamp = new Date().getTime();
+  const url = `${GAS_WEB_APP_URL}?folderId=${folderId}&_t=${timestamp}`;
 
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      method: 'GET',
+      // Các headers này ép buộc trình duyệt không được dùng cache cũ
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    });
     
     if (!response.ok) {
       throw new Error(`Lỗi kết nối (${response.status})`);
