@@ -14,6 +14,7 @@ interface ErrorBoundaryState {
 // Simple Error Boundary to catch crash errors
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState = { hasError: false, error: null };
+  declare props: Readonly<ErrorBoundaryProps>;
 
   static getDerivedStateFromError(error: any): ErrorBoundaryState {
     return { hasError: true, error };

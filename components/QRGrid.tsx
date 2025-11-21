@@ -164,14 +164,14 @@ export const QRGrid: React.FC<QRGridProps> = ({ items, selectedTicket }) => {
               >
                 {/* 
                   SECTION 1: Header 
-                  - Updated: Department is now Large, Bold, and Uppercase just like Ticket Number.
-                  - Layout: Space-between to push them to edges.
+                  - Updated: Both Ticket Number and Department are now visually prominent.
+                  - Border bottom added for clarity.
                 */}
-                <div className="w-full flex justify-between items-center border-b border-slate-200 pb-1 mb-1 print:border-black min-h-[2.5rem] flex-none">
-                   <div className="text-base font-bold uppercase tracking-wider text-slate-800 print:text-xl print:leading-none text-left">
+                <div className="w-full flex justify-between items-start border-b-2 border-slate-800 pb-1 mb-1 print:border-black min-h-[2.5rem] flex-none gap-2">
+                   <div className="text-lg font-black uppercase tracking-wider text-slate-900 print:text-xl leading-none text-left whitespace-nowrap">
                     {item.ticketNumber}
                    </div>
-                   <div className="text-base font-bold uppercase text-slate-800 print:text-xl print:leading-none text-right max-w-[60%] truncate">
+                   <div className="text-lg font-black uppercase tracking-wider text-slate-900 print:text-xl leading-none text-right break-words flex-1">
                     {item.department}
                    </div>
                 </div>
