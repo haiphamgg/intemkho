@@ -5,7 +5,7 @@ import Papa from 'papaparse';
 export const SPREADSHEET_ID = '1R2j006xS2Cjrcx5i8wDsSmb-hIFhi708ZmhjN3e-DLM';
 
 // URL của Google Apps Script Web App
-// BẠN CẦN CẬP NHẬT URL NÀY SAU KHI DEPLOY SCRIPT TRÊN SHEET MỚI
+// QUAN TRỌNG: Script này phải có hàm doGet() để DriveService hoạt động
 export const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyQ4YV0htouX3tP_7FstedjAdpjuPqDAWdpjcE11JhugrNW8iTCI0AvAauSoAbOXevd/exec'; 
 
 export const fetchGoogleSheetData = async (sheetName: string = 'DATA', range: string = 'A2:Z'): Promise<string[][]> => {
@@ -49,28 +49,34 @@ export const fetchGoogleSheetData = async (sheetName: string = 'DATA', range: st
   }
 };
 
-// Hàm gửi dữ liệu lên Google Sheet thông qua Apps Script
-export const saveToGoogleSheet = async (payload: any): Promise<any> => {
-  if (!SCRIPT_URL || SCRIPT_URL.includes('...')) {
-    throw new Error("Vui lòng cấu hình URL Google Apps Script trong services/sheetService.ts");
+export const saveToGoogleSheet = async (data: any): Promise<any> => {
+  if (!SCRIPT_URL) {
+    throw new Error("Script URL is not configured");
   }
 
   try {
+    // Use fetch with method POST. 
+    // Google Apps Script `doPost(e)` receives the body.
+    // We send JSON string. We do NOT set 'Content-Type': 'application/json' to avoid preflight OPTIONS request which might fail on some GAS deployments.
+    // GAS will receive it as text/plain but can parse the postData.contents.
     const response = await fetch(SCRIPT_URL, {
       method: 'POST',
-      mode: 'no-cors', // Google Apps Script yêu cầu no-cors hoặc redirect handling đặc biệt
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8',
-      },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(data)
     });
 
-    // Vì mode: 'no-cors', ta không đọc được response body trực tiếp.
-    // Giả định thành công nếu không có lỗi mạng.
-    return { result: "success" };
+    if (!response.ok) {
+      throw new Error(`Lỗi kết nối server: ${response.status}`);
+    }
 
-  } catch (error) {
-    console.error("Save error:", error);
-    throw error;
+    const result = await response.json();
+    
+    if (result.status === 'error') {
+      throw new Error(result.message || "Lỗi xử lý từ Server");
+    }
+
+    return result;
+  } catch (error: any) {
+    console.error("Save to sheet failed:", error);
+    throw new Error(error.message || "Không thể lưu dữ liệu");
   }
 };

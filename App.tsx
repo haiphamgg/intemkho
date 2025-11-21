@@ -5,16 +5,13 @@ import { TicketSelector } from './components/TicketSelector';
 import { QRGrid } from './components/QRGrid';
 import { LookupPage } from './components/LookupPage';
 import { DriveFileBrowser } from './components/DriveFileBrowser';
-import { InventoryReport } from './components/InventoryReport';
-import { MasterData } from './components/MasterData';
-import { WarehouseForm } from './components/WarehouseForm';
 import { DeviceRow } from './types';
 import { analyzeTicketData } from './services/geminiService';
 import { fetchGoogleSheetData, SPREADSHEET_ID } from './services/sheetService';
-import { Sparkles, Printer, Search as SearchIcon, LayoutGrid, ExternalLink, BookOpen, FolderOpen, BarChart3, Database, FileInput, FileOutput, AlertTriangle, Settings } from 'lucide-react';
+import { Sparkles, LayoutGrid, FolderOpen, Search as SearchIcon, AlertTriangle, Settings, Database } from 'lucide-react';
 
 // --- CONFIG ---
-// Cấu hình chỉ số cột dựa trên cấu trúc Sheet "DATA" mới:
+// Cấu hình chỉ số cột dựa trên cấu trúc Sheet "DATA":
 // 0:STT, 1:Type, 2:Partner, 3:Section, 4:TicketNo, 5:Date, 
 // 6:Code, 7:Name, 8:Details, 9:Unit, 10:Brand, 11:Country, 
 // 12:Model, 13:Warranty, 14:Qty, 15:Price, 16:Total, 17:Docs
@@ -23,7 +20,6 @@ const COL_PARTNER = 2;
 const COL_SECTION = 3;
 const COL_TICKET = 4;
 const COL_DATE = 5;
-const COL_CODE = 6;
 const COL_NAME = 7;
 const COL_MODEL = 12;
 const COL_WARRANTY = 13;
@@ -31,7 +27,7 @@ const COL_WARRANTY = 13;
 const DOCS_FOLDER_ID = '16khjeVK8e7evRXQQK7z9IJit4yCrO9f1';
 const MATERIALS_FOLDER_ID = '1IUwHzC02O4limzpg7wPQEMpDB9uc5Ui8';
 
-type ViewMode = 'print' | 'lookup' | 'documents' | 'materials' | 'inventory' | 'master' | 'import' | 'export';
+type ViewMode = 'print' | 'lookup' | 'documents' | 'materials';
 
 export default function App() {
   const [rawData, setRawData] = useState<string[][]>([]);
@@ -47,13 +43,12 @@ export default function App() {
     setIsLoading(true);
     setConnectionError(null);
     try {
-      // Fetch from A2 to skip 1 header row
+      // Fetch from A2 to skip header row
       const data = await fetchGoogleSheetData('DATA', 'A2:Z');
       if (data && data.length > 0) {
         setRawData(data);
         setLastUpdated(new Date());
       } else {
-        // Data loaded but empty array
         setRawData([]);
       }
     } catch (err: any) {
@@ -157,16 +152,13 @@ export default function App() {
                   <strong>Bước 1:</strong> Mở Google Sheet của bạn: <a href={`https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}`} target="_blank" className="text-blue-600 underline">Link Sheet</a>
                 </li>
                 <li>
-                  <strong>Bước 2:</strong> Đổi tên các Tab (Sheet) ở phía dưới chính xác thành: 
-                  <span className="font-mono bg-slate-200 px-1 rounded mx-1">DATA</span>, 
-                  <span className="font-mono bg-slate-200 px-1 rounded mx-1">DM_THIETBI</span>, 
-                  <span className="font-mono bg-slate-200 px-1 rounded mx-1">DM_NCC</span>...
+                  <strong>Bước 2:</strong> Đảm bảo tên Sheet chứa dữ liệu là <span className="font-mono bg-slate-200 px-1 rounded mx-1">DATA</span>.
                 </li>
                 <li>
                   <strong>Bước 3:</strong> Nhấn nút <span className="font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Share</span> (Chia sẻ) góc trên bên phải.
                 </li>
                 <li>
-                  <strong>Bước 4:</strong> Ở phần "General access" (Quyền truy cập chung), chọn <span className="font-bold">"Anyone with the link"</span> (Bất kỳ ai có liên kết).
+                  <strong>Bước 4:</strong> Ở phần "General access", chọn <span className="font-bold">"Anyone with the link"</span> (Bất kỳ ai có liên kết).
                 </li>
               </ul>
             </div>
@@ -176,7 +168,7 @@ export default function App() {
               className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-lg shadow-blue-500/30 transition-all active:scale-95 flex items-center gap-2 mx-auto"
             >
               <Sparkles className="w-5 h-5" />
-              Đã khắc phục, thử lại
+              Thử lại
             </button>
           </div>
         </div>
@@ -216,11 +208,7 @@ export default function App() {
             </main>
           </div>
         );
-      case 'master': return <MasterData />;
-      case 'import': return <WarehouseForm type="import" />;
-      case 'export': return <WarehouseForm type="export" />;
       case 'lookup': return <LookupPage data={parsedData} onReload={handleLoadData} isLoading={isLoading} lastUpdated={lastUpdated} />;
-      case 'inventory': return <InventoryReport data={parsedData} isLoading={isLoading} />;
       case 'documents': return <DriveFileBrowser folderId={DOCS_FOLDER_ID} title="Chứng từ Kho" description="Danh sách phiếu xuất nhập kho." />;
       case 'materials': return <DriveFileBrowser folderId={MATERIALS_FOLDER_ID} title="Tài liệu kỹ thuật" description="Hướng dẫn sử dụng & thông số." />;
       default: return null;
@@ -230,8 +218,8 @@ export default function App() {
   const NavButton = ({ mode, icon: Icon, label, colorClass }: any) => (
     <button
       onClick={() => setViewMode(mode)}
-      className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
-        viewMode === mode ? `bg-white shadow-sm ${colorClass}` : 'text-slate-500 hover:text-slate-700'
+      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
+        viewMode === mode ? `bg-white shadow-md ${colorClass}` : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
       }`}
     >
       <Icon className="w-4 h-4" />
@@ -247,20 +235,17 @@ export default function App() {
              <Database className="w-6 h-6" />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-slate-800 leading-tight">Quản Lý Kho & QR</h1>
-            <p className="text-xs text-slate-500">Phiên bản WMS v2.1</p>
+            <h1 className="text-lg font-bold text-slate-800 leading-tight">QR Print Master</h1>
+            <p className="text-xs text-slate-500">Kho thiết bị & Vật tư</p>
           </div>
         </div>
 
-        <div className="flex flex-1 overflow-x-auto no-scrollbar bg-slate-100 p-1 rounded-lg max-w-full md:max-w-4xl">
-          <NavButton mode="print" icon={LayoutGrid} label="In Tem" colorClass="text-blue-600" />
-          <NavButton mode="master" icon={Database} label="Danh mục" colorClass="text-indigo-600" />
-          <NavButton mode="import" icon={FileInput} label="Nhập Kho" colorClass="text-emerald-600" />
-          <NavButton mode="export" icon={FileOutput} label="Xuất Kho" colorClass="text-orange-600" />
-          <div className="w-px bg-slate-300 mx-1 my-1"></div>
+        <div className="flex flex-1 overflow-x-auto no-scrollbar bg-slate-100 p-1.5 rounded-xl max-w-full md:max-w-2xl justify-between md:justify-start gap-1">
+          <NavButton mode="print" icon={LayoutGrid} label="In Tem QR" colorClass="text-blue-600" />
           <NavButton mode="lookup" icon={SearchIcon} label="Tra Cứu" colorClass="text-purple-600" />
-          <NavButton mode="inventory" icon={BarChart3} label="Báo Cáo" colorClass="text-teal-600" />
+          <div className="w-px bg-slate-300 mx-2 my-1 hidden md:block"></div>
           <NavButton mode="documents" icon={FolderOpen} label="Chứng từ" colorClass="text-amber-600" />
+          <NavButton mode="materials" icon={FolderOpen} label="Tài liệu" colorClass="text-emerald-600" />
         </div>
       </header>
 
