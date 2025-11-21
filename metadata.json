@@ -1,0 +1,5 @@
+{
+  "name": "In tem QR Kho thiết bị, linh kiện",
+  "description": "A utility to generate and print QR codes from Google Sheets data, powered by Gemini for data analysis.",
+  "requestFramePermissions": []
+}
