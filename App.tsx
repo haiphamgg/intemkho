@@ -4,13 +4,13 @@ import { DataInput } from './components/DataInput';
 import { TicketSelector } from './components/TicketSelector';
 import { QRGrid } from './components/QRGrid';
 import { LookupPage } from './components/LookupPage';
+import { DriveFileBrowser } from './components/DriveFileBrowser';
 import { DeviceRow } from './types';
 import { analyzeTicketData } from './services/geminiService';
 import { fetchGoogleSheetData } from './services/sheetService';
-import { Sparkles, Printer, Search as SearchIcon, LayoutGrid, ExternalLink } from 'lucide-react';
+import { Sparkles, Printer, Search as SearchIcon, LayoutGrid, ExternalLink, BookOpen, FolderOpen } from 'lucide-react';
 
 // Constants for column indices based on range A3:U
-// A=0, B=1, C=2, D=3, E=4, ... H=7, ... S=18
 const COL_PROVIDER = 2; // Column C (Khoa phòng / Nhà CC)
 const COL_DEPT = 3;     // Column D (Bộ phận sử dụng)
 const COL_TICKET = 4;   // Column E (Số phiếu)
@@ -20,10 +20,11 @@ const COL_MODEL = 12;   // Column M (Model, Serial)
 const COL_WARRANTY = 13;// Column N (Bảo hành)
 const COL_QR = 18;      // Column S (Mã QR/Barcode)
 
-// ID của thư mục Google Drive chứa chứng từ
-const DRIVE_FOLDER_ID = '16khjeVK8e7evRXQQK7z9IJit4yCrO9f1';
+// ID của thư mục Google Drive
+const DOCS_FOLDER_ID = '16khjeVK8e7evRXQQK7z9IJit4yCrO9f1'; // Thư mục Chứng từ
+const MATERIALS_FOLDER_ID = '1IUwHzC02O4limzpg7wPQEMpDB9uc5Ui8'; // Thư mục Tài liệu
 
-type ViewMode = 'print' | 'lookup';
+type ViewMode = 'print' | 'lookup' | 'documents' | 'materials';
 
 export default function App() {
   const [rawData, setRawData] = useState<string[][]>([]);
@@ -78,20 +79,14 @@ export default function App() {
           const labelProvider = isPX ? "Khoa phòng: " : "Nhà CC: ";
           const labelDate = isPX ? "Ngày cấp: " : "Ngày giao: ";
           
-          // Robust date formatter: Avoids `new Date()` implicit conversions which cause MM/DD inversion
+          // Robust date formatter
           const formatDate = (d: string) => {
             if (!d) return "";
-            
-            // If already has slashes (e.g. 02/05/2024), assume it is visually correct from Sheet
             if (d.includes('/')) return d;
-
-            // If ISO format YYYY-MM-DD
             if (d.match(/^\d{4}-\d{2}-\d{2}$/)) {
                 const [y, m, dPart] = d.split('-');
                 return `${dPart}/${m}/${y}`;
             }
-
-            // Try standard parse as fallback for weird formats
             try {
                 const dateObj = new Date(d);
                 if (!isNaN(dateObj.getTime())) {
@@ -116,7 +111,7 @@ export default function App() {
           ticketNumber: ticketNumber,
           qrContent: qrContent,
           department: row[COL_DEPT]?.trim() || '',
-          provider: row[COL_PROVIDER]?.trim() || '', // New Field
+          provider: row[COL_PROVIDER]?.trim() || '',
           deviceName: row[COL_NAME]?.trim() || '',
           modelSerial: modelSerial,
           fullData: row
@@ -152,50 +147,13 @@ export default function App() {
   }, [selectedTicket, selectedItems, viewMode]);
 
   const getDriveSearchLink = (ticket: string) => {
-    return `https://drive.google.com/drive/folders/${DRIVE_FOLDER_ID}?q=${encodeURIComponent(ticket)}`;
+    return `https://drive.google.com/drive/folders/${DOCS_FOLDER_ID}?q=${encodeURIComponent(ticket)}`;
   };
 
-  return (
-    <div className="h-full flex flex-col bg-slate-50">
-      {/* Header - Hidden when printing */}
-      <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shrink-0 no-print shadow-sm z-20 relative">
-        <div className="flex items-center gap-3">
-          <div className="bg-primary text-white p-2 rounded-lg">
-             <Printer className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-slate-800 leading-tight">QR Kho Thiết Bị</h1>
-            <p className="text-xs text-slate-500 hidden sm:block">Quản lý in tem & Tra cứu</p>
-          </div>
-        </div>
-
-        {/* Navigation Tabs */}
-        <div className="flex bg-slate-100 p-1 rounded-lg">
-          <button
-            onClick={() => setViewMode('print')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-              viewMode === 'print' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <LayoutGrid className="w-4 h-4" />
-            In Tem
-          </button>
-          <button
-            onClick={() => setViewMode('lookup')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-              viewMode === 'lookup' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            <SearchIcon className="w-4 h-4" />
-            Tra Cứu
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <div className="flex-1 overflow-hidden relative">
-        
-        {viewMode === 'print' ? (
+  const renderContent = () => {
+    switch (viewMode) {
+      case 'print':
+        return (
           <div className="h-full flex flex-col md:flex-row">
             {/* Sidebar Controls */}
             <div className="w-full md:w-80 bg-white border-r border-slate-200 p-4 overflow-y-auto flex flex-col gap-4 shrink-0 no-print shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10">
@@ -254,15 +212,95 @@ export default function App() {
               <QRGrid items={selectedItems} selectedTicket={selectedTicket} />
             </main>
           </div>
-        ) : (
-          /* Lookup View */
+        );
+      case 'lookup':
+        return (
           <LookupPage 
             data={parsedData} 
             onReload={handleLoadData} 
             isLoading={isLoading} 
             lastUpdated={lastUpdated}
           />
-        )}
+        );
+      case 'documents':
+        return (
+          <DriveFileBrowser 
+            folderId={DOCS_FOLDER_ID} 
+            title="Chứng từ Kho" 
+            description="Danh sách phiếu xuất nhập kho và biên bản bàn giao."
+          />
+        );
+      case 'materials':
+        return (
+          <DriveFileBrowser 
+            folderId={MATERIALS_FOLDER_ID} 
+            title="Tài liệu kỹ thuật" 
+            description="Hướng dẫn sử dụng, thông số kỹ thuật và tài liệu hướng dẫn."
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="h-full flex flex-col bg-slate-50">
+      {/* Header - Hidden when printing */}
+      <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shrink-0 no-print shadow-sm z-20 relative">
+        <div className="flex items-center gap-3">
+          <div className="bg-primary text-white p-2 rounded-lg">
+             <Printer className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-slate-800 leading-tight">QR Kho Thiết Bị</h1>
+            <p className="text-xs text-slate-500 hidden sm:block">Quản lý in tem & Tra cứu</p>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="flex bg-slate-100 p-1 rounded-lg overflow-x-auto">
+          <button
+            onClick={() => setViewMode('print')}
+            className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
+              viewMode === 'print' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <LayoutGrid className="w-4 h-4" />
+            In Tem
+          </button>
+          <button
+            onClick={() => setViewMode('lookup')}
+            className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
+              viewMode === 'lookup' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <SearchIcon className="w-4 h-4" />
+            Tra Cứu
+          </button>
+          <button
+            onClick={() => setViewMode('documents')}
+            className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
+              viewMode === 'documents' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <FolderOpen className="w-4 h-4" />
+            Chứng từ
+          </button>
+           <button
+            onClick={() => setViewMode('materials')}
+            className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${
+              viewMode === 'materials' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <BookOpen className="w-4 h-4" />
+            Tài liệu
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <div className="flex-1 overflow-hidden relative">
+        {renderContent()}
       </div>
     </div>
   );

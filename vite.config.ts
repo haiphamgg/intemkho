@@ -7,9 +7,12 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      // Only define the specific key needed to avoid breaking libraries checking "typeof process"
+      // Gemini API Key
       'process.env.API_KEY': JSON.stringify(env.VITE_API_KEY || env.API_KEY),
-      // Fallback for other process.env access if strictly needed, but prefer specific keys
+      // Google Drive API Key (New)
+      'process.env.DRIVE_API_KEY': JSON.stringify(env.VITE_DRIVE_API_KEY || env.DRIVE_API_KEY),
+      
+      // Fallback for other process.env access if strictly needed
       'process.env.NODE_ENV': JSON.stringify(mode),
     },
   };

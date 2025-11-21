@@ -15,3 +15,14 @@ export interface AnalysisResult {
   count: number;
   isComplete: boolean;
 }
+
+export interface DriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  webViewLink: string;
+  webContentLink?: string;
+  thumbnailLink?: string;
+  size?: string | number;
+  createdTime?: string;
+}
