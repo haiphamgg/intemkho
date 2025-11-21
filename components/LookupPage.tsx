@@ -1,10 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { Search, Package, Calendar, Tag, Layers, FileText } from 'lucide-react';
+import { Search, Package, Calendar, Tag, Layers, FileText, ExternalLink } from 'lucide-react';
 import { DeviceRow } from '../types';
 
 interface LookupPageProps {
   data: DeviceRow[];
 }
+
+// ID của thư mục Google Drive chứa chứng từ
+const DRIVE_FOLDER_ID = '16khjeVK8e7evRXQQK7z9IJit4yCrO9f1';
 
 export const LookupPage: React.FC<LookupPageProps> = ({ data }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -22,6 +25,12 @@ export const LookupPage: React.FC<LookupPageProps> = ({ data }) => {
 
   // Limit initial display to improve performance
   const displayData = filteredData.slice(0, 100);
+
+  // Helper to generate smart search link
+  const getDriveSearchLink = (ticket: string) => {
+    // Creates a link that searches specifically inside the folder for the ticket number
+    return `https://drive.google.com/drive/folders/${DRIVE_FOLDER_ID}?q=${encodeURIComponent(ticket)}`;
+  };
 
   return (
     <div className="h-full flex flex-col bg-slate-50 p-4 md:p-6 overflow-hidden">
@@ -69,10 +78,24 @@ export const LookupPage: React.FC<LookupPageProps> = ({ data }) => {
                 displayData.map((row) => (
                   <tr key={row.rowId} className="hover:bg-indigo-50/30 transition-colors group">
                     <td className="px-6 py-4 align-top">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-50 text-blue-700 font-bold text-sm border border-blue-100">
-                        <FileText className="w-4 h-4" />
-                        {row.ticketNumber}
-                      </span>
+                      <div className="flex flex-col items-start gap-2">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-blue-50 text-blue-700 font-bold text-sm border border-blue-100">
+                          <FileText className="w-4 h-4" />
+                          {row.ticketNumber}
+                        </span>
+                        
+                        {/* Link to Drive Search */}
+                        <a 
+                          href={getDriveSearchLink(row.ticketNumber)}
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-xs text-slate-500 hover:text-blue-600 font-medium transition-colors ml-1 group/link"
+                          title="Mở thư mục chứng từ trên Google Drive"
+                        >
+                          <ExternalLink className="w-3 h-3 group-hover/link:scale-110 transition-transform" />
+                          Xem chứng từ
+                        </a>
+                      </div>
                     </td>
                     <td className="px-6 py-4 align-top">
                       <div className="font-bold text-slate-800 text-lg mb-1 group-hover:text-indigo-700 transition-colors">

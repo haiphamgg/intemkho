@@ -7,7 +7,7 @@ import { LookupPage } from './components/LookupPage';
 import { DeviceRow } from './types';
 import { analyzeTicketData } from './services/geminiService';
 import { fetchGoogleSheetData } from './services/sheetService';
-import { Sparkles, Printer, Search as SearchIcon, LayoutGrid } from 'lucide-react';
+import { Sparkles, Printer, Search as SearchIcon, LayoutGrid, ExternalLink } from 'lucide-react';
 
 // Constants for column indices based on range A3:U
 // A=0, B=1, C=2, D=3, E=4, ... H=7, ... S=18
@@ -19,6 +19,9 @@ const COL_NAME = 7;     // Column H (Tên thiết bị)
 const COL_MODEL = 12;   // Column M (Model, Serial)
 const COL_WARRANTY = 13;// Column N (Bảo hành)
 const COL_QR = 18;      // Column S (Mã QR/Barcode)
+
+// ID của thư mục Google Drive chứa chứng từ
+const DRIVE_FOLDER_ID = '16khjeVK8e7evRXQQK7z9IJit4yCrO9f1';
 
 type ViewMode = 'print' | 'lookup';
 
@@ -147,6 +150,10 @@ export default function App() {
     }
   }, [selectedTicket, selectedItems, viewMode]);
 
+  const getDriveSearchLink = (ticket: string) => {
+    return `https://drive.google.com/drive/folders/${DRIVE_FOLDER_ID}?q=${encodeURIComponent(ticket)}`;
+  };
+
   return (
     <div className="h-full flex flex-col bg-slate-50">
       {/* Header - Hidden when printing */}
@@ -205,24 +212,38 @@ export default function App() {
                 onSelect={setSelectedTicket} 
               />
 
-              {/* AI Analysis Card */}
+              {/* Document Link & AI Analysis */}
               {selectedTicket && (
-                <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-4 rounded-xl border border-indigo-100 shadow-sm mt-auto">
-                  <div className="flex items-center gap-2 mb-2 text-indigo-700">
-                    <Sparkles className="w-4 h-4" />
-                    <h3 className="font-semibold text-sm">AI Phân Tích</h3>
+                <div className="flex flex-col gap-3 mt-auto">
+                  {/* Drive Link Button */}
+                  <a 
+                    href={getDriveSearchLink(selectedTicket)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full py-2.5 bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 hover:text-blue-600 rounded-xl text-sm font-medium transition-all shadow-sm group"
+                  >
+                    <ExternalLink className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                    Xem chứng từ gốc
+                  </a>
+
+                  {/* AI Card */}
+                  <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-4 rounded-xl border border-indigo-100 shadow-sm">
+                    <div className="flex items-center gap-2 mb-2 text-indigo-700">
+                      <Sparkles className="w-4 h-4" />
+                      <h3 className="font-semibold text-sm">AI Phân Tích</h3>
+                    </div>
+                    
+                    {isAnalyzing ? (
+                      <div className="flex items-center gap-2 text-xs text-indigo-400 animate-pulse">
+                        <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></div>
+                        Đang xử lý...
+                      </div>
+                    ) : (
+                      <div className="text-xs text-slate-700 whitespace-pre-line leading-relaxed">
+                        {aiAnalysis}
+                      </div>
+                    )}
                   </div>
-                  
-                  {isAnalyzing ? (
-                    <div className="flex items-center gap-2 text-xs text-indigo-400 animate-pulse">
-                      <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></div>
-                      Đang xử lý...
-                    </div>
-                  ) : (
-                    <div className="text-xs text-slate-700 whitespace-pre-line leading-relaxed">
-                      {aiAnalysis}
-                    </div>
-                  )}
                 </div>
               )}
             </div>
