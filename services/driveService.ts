@@ -28,11 +28,37 @@ export const fetchDriveFiles = async (folderId: string, scriptUrl: string): Prom
       throw new Error(data.error);
     }
 
-    return data.files || [];
+    const rawFiles = data.files || [];
+
+    // Normalize data to match DriveFile interface
+    // Google Apps Script DriveApp return slightly different keys than Drive API v3
+    return rawFiles.map((f: any) => ({
+      id: f.id,
+      name: f.name,
+      mimeType: f.mimeType,
+      webViewLink: f.webViewLink || f.url, // Script might return 'url'
+      webContentLink: f.webContentLink || f.downloadUrl,
+      thumbnailLink: f.thumbnailLink,
+      size: f.size,
+      // Handle date variations
+      createdTime: f.createdTime || f.dateCreated || new Date().toISOString(),
+      modifiedTime: f.modifiedTime || f.lastUpdated || new Date().toISOString(),
+      // Handle user variations. Script sometimes returns owner object or just email
+      lastModifyingUser: f.lastModifyingUser || (f.owner ? { displayName: f.owner.name || f.owner.email, emailAddress: f.owner.email } : { displayName: 'Admin' })
+    }));
+
   } catch (error: any) {
     console.error("Failed to fetch drive files:", error);
     throw new Error(error.message || "Lỗi kết nối đến Google Apps Script");
   }
+};
+
+export const getDownloadLink = (file: DriveFile): string => {
+  // If API provided a direct download link, use it
+  if (file.webContentLink) return file.webContentLink;
+  
+  // Otherwise construct the standard Google Drive export link
+  return `https://drive.google.com/uc?export=download&id=${file.id}`;
 };
 
 export const formatFileSize = (bytes?: string | number): string => {
