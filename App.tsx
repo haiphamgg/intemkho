@@ -286,7 +286,7 @@ export default function App() {
              <div className="text-[10px] font-bold text-slate-500 uppercase px-4 mb-2 mt-4 tracking-wider">Dữ Liệu</div>
              <SidebarItem mode="vouchers" icon={FileText} label="Kho Chứng Từ" />
              <SidebarItem mode="drive" icon={FolderOpen} label="Tài Liệu KT" />
-             {isAdmin && <SidebarItem mode="master" icon={List} label="Danh Mục" />}
+             <SidebarItem mode="master" icon={List} label="Danh Mục" />
          </nav>
 
          <div className="p-4 border-t border-slate-800/50">
@@ -340,7 +340,7 @@ export default function App() {
                      <SidebarItem mode="lookup" icon={SearchIcon} label="Tra Cứu" />
                      <SidebarItem mode="vouchers" icon={FileText} label="Kho Chứng Từ" />
                      <SidebarItem mode="drive" icon={FolderOpen} label="Tài Liệu KT" />
-                     {isAdmin && <SidebarItem mode="master" icon={List} label="Danh Mục" />}
+                     <SidebarItem mode="master" icon={List} label="Danh Mục" />
                  </div>
                  <div className="pt-4 border-t border-slate-800">
                      <button onClick={handleSettingsClick} className="flex items-center gap-3 text-slate-400 px-4 py-2 w-full">
@@ -462,7 +462,7 @@ export default function App() {
                 </div>
             )}
 
-            {viewMode === 'master' && isAdmin && (
+            {viewMode === 'master' && (
                 <div className="h-full animate-in fade-in duration-300">
                    <MasterData />
                 </div>

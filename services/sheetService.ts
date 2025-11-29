@@ -5,12 +5,22 @@ const FALLBACK_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyqEtmuL0lO
 // @ts-ignore
 export const SCRIPT_URL = process.env.SCRIPT_URL || FALLBACK_SCRIPT_URL;
 
-export const fetchGoogleSheetData = async (sheetId: string, sheetName: string = 'DULIEU'): Promise<string[][]> => {
+export const fetchGoogleSheetData = async (sheetId: string, sheetNameOrRange: string = 'DULIEU'): Promise<string[][]> => {
   if (!sheetId) {
     throw new Error("Chưa nhập Sheet ID.");
   }
 
-  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}&range=A3:U&headers=1`;
+  // Phân tách Sheet Name và Range nếu có dấu '!' (VD: "DANHMUC!A2:G")
+  let sheet = sheetNameOrRange;
+  let range = 'A3:U'; // Mặc định cho DULIEU
+
+  if (sheetNameOrRange.includes('!')) {
+    const parts = sheetNameOrRange.split('!');
+    sheet = parts[0];
+    range = parts[1];
+  }
+
+  const url = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheet)}&range=${encodeURIComponent(range)}&headers=1`;
 
   try {
     const response = await fetch(url);
@@ -20,6 +30,7 @@ export const fetchGoogleSheetData = async (sheetId: string, sheetName: string = 
     }
 
     const text = await response.text();
+    // GVIZ trả về JSON bọc trong callback, cần parse
     const jsonMatch = text.match(/google\.visualization\.Query\.setResponse\(([\s\S\w]+)\);/);
     
     if (!jsonMatch || !jsonMatch[1]) {
@@ -38,8 +49,8 @@ export const fetchGoogleSheetData = async (sheetId: string, sheetName: string = 
 
     return rows;
   } catch (error: any) {
-    console.error(`Error fetching sheet ${sheetName}:`, error);
-    throw new Error("Không thể lấy dữ liệu. Hãy chắc chắn Sheet ID đúng và đã chia sẻ 'Bất kỳ ai có liên kết'.");
+    console.error(`Error fetching sheet ${sheetNameOrRange}:`, error);
+    throw new Error(`Không thể lấy dữ liệu từ sheet "${sheetNameOrRange}". Hãy kiểm tra tên sheet và quyền truy cập.`);
   }
 };
 
