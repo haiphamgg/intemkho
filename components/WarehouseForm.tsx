@@ -2,18 +2,19 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { fetchGoogleSheetData, saveToGoogleSheet } from '../services/sheetService';
 import { WarehouseTicket, TransactionItem } from '../types';
-import { Save, Trash2, FileInput, FileOutput, Calendar, User, Building, Hash, Loader2, PlusCircle, Search, DollarSign, Plus } from 'lucide-react';
+import { Save, Trash2, FileInput, FileOutput, Calendar, User, Building, Hash, Loader2, PlusCircle, Search, AlertCircle, StickyNote, Plus } from 'lucide-react';
 
 interface WarehouseFormProps {
   type: 'import' | 'export';
   sheetId: string;
-  scriptUrl: string; // Added prop
+  scriptUrl: string; 
 }
 
 export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scriptUrl }) => {
   const isImport = type === 'import';
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Master Data State
   const [suppliers, setSuppliers] = useState<string[]>([]);
@@ -28,8 +29,8 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
   
   // Tồn kho & Metadata từ DULIEU
   const [inventoryMap, setInventoryMap] = useState<Map<string, number>>(new Map());
-  const [warrantyMap, setWarrantyMap] = useState<Map<string, string>>(new Map()); // Map stores 'dd/mm/yyyy'
-  const [priceMap, setPriceMap] = useState<Map<string, number>>(new Map()); // Map stores latest price
+  const [warrantyMap, setWarrantyMap] = useState<Map<string, string>>(new Map()); 
+  const [priceMap, setPriceMap] = useState<Map<string, number>>(new Map()); 
   const [deviceMetaMap, setDeviceMetaMap] = useState<Map<string, string[]>>(new Map());
   
   // Raw Data for Ticket Calculation
@@ -149,21 +150,32 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
       const prefix = type === 'import' ? 'PN' : 'PX';
       let maxNum = 0;
 
-      // Col Index 4 is Ticket Number (E)
-      // Note: data here is rawDulieu (A..U)
-      data.forEach(row => {
-          const t = row[4] ? row[4].toString().toUpperCase().trim() : '';
-          // Check if it matches prefix + numbers (e.g. PN0015, PN123)
+      data.forEach((row) => {
+          // Bỏ qua dòng STT nếu có (thường là tiêu đề cột A)
+          if (row[0] === 'STT') return;
+
+          // Kiểm tra kỹ ô E (index 4) - Số Phiếu
+          const cellE = row[4] ? row[4].toString().trim() : '';
+          
+          // Bỏ qua nếu là dòng tiêu đề "Số Phiếu" hoặc rỗng
+          if (!cellE || cellE.toUpperCase() === 'SỐ PHIẾU' || cellE.toUpperCase() === 'SO PHIEU') return;
+
+          const t = cellE.toUpperCase();
+          // Kiểm tra xem có bắt đầu bằng tiền tố (PN/PX) không
           if (t.startsWith(prefix)) {
-              const numPart = parseInt(t.replace(prefix, '').trim());
+              // Lấy phần số bằng cách loại bỏ tất cả ký tự không phải số (regex \D)
+              // Ví dụ: "PX-0018" -> 18, "PX 0019" -> 19
+              const numStr = t.replace(/\D/g, ''); 
+              const numPart = parseInt(numStr, 10);
+              
               if (!isNaN(numPart) && numPart > maxNum) {
                   maxNum = numPart;
               }
           }
       });
 
+      // Chỉ tăng 1 đơn vị so với số lớn nhất tìm được
       const nextNum = maxNum + 1;
-      // Format as 4 digits: PN0001
       return `${prefix}${nextNum.toString().padStart(4, '0')}`;
   };
 
@@ -173,6 +185,7 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
     
     const loadAllData = async () => {
       setIsLoading(true);
+      setSubmitError(null);
       try {
         const promises = [
             fetchGoogleSheetData(sheetId, 'DMDC!A4:E'),
@@ -185,7 +198,7 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
         const deviceData = results[1];
         const dulieuData = results[2];
         
-        setRawDulieu(dulieuData); // Save raw data for ticket generation later
+        setRawDulieu(dulieuData); 
 
         // Parse DMDC
         const depts = new Set<string>();
@@ -223,8 +236,10 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
             const pMap = new Map<string, number>();
             const metaMap = new Map<string, string[]>();
 
-            dulieuData.forEach(row => {
+            dulieuData.forEach((row) => {
                 const ticketNo = row[4] ? row[4].toString().trim().toUpperCase() : ''; 
+                if (!ticketNo || ticketNo === 'SỐ PHIẾU') return;
+
                 const code = row[6];
                 const name = row[7];
                 const key = generateKey(code, name);
@@ -251,7 +266,6 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
                     const rawWarranty = row[13];
                     if (rawWarranty) {
                         const formattedW = formatSheetDateToDisplay(rawWarranty);
-                        // Chỉ cập nhật nếu date hợp lệ
                         if (formattedW && formattedW.includes('/')) {
                             wMap.set(key, formattedW);
                         }
@@ -278,21 +292,19 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
     loadAllData();
   }, [sheetId]);
 
-  // Effect to generate Ticket Number when Type or RawData changes
   useEffect(() => {
       if (!isLoading && rawDulieu.length >= 0) {
           const nextTicket = generateNextTicketNumber(type, rawDulieu);
           setTicket(prev => ({
               ...prev, 
               ticketType: isImport ? 'PN' : 'PX',
-              ticketNumber: nextTicket, // Auto-fill next number
-              items: [] // Reset items when switching mode
+              ticketNumber: nextTicket, 
+              items: [] 
           }));
       }
   }, [type, rawDulieu, isLoading]);
 
 
-  // Combined Device List
   const availableDevices = useMemo(() => {
      let devices = [...masterDevices];
      const masterKeys = new Set(devices.map(d => generateKey(d[0], d[1])));
@@ -319,7 +331,6 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
       return inventoryMap.get(key) || 0;
   };
 
-  // --- 2. AUTO-FILL DEVICE INFO ---
   const handleDeviceSelection = (value: string, type: 'code' | 'name') => {
     let matchedDevice: string[] | undefined;
 
@@ -353,7 +364,7 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
             manufacturer: matchedDevice![4] || '',
             country: matchedDevice![5] || '',
             modelSerial: matchedDevice![6] || '',
-            warranty: inputWarranty || prev.warranty, // Prioritize map
+            warranty: inputWarranty || prev.warranty, 
             quantity: !isImport && currentStock < 1 ? 0 : 1,
             price: lastPrice || prev.price, 
             total: (!isImport && currentStock < 1 ? 0 : 1) * (lastPrice || prev.price)
@@ -392,6 +403,7 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
         }]
     }));
     setCurrentItem(emptyItem); 
+    setSubmitError(null);
   };
 
   const removeItem = (index: number) => {
@@ -402,72 +414,74 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
   };
 
   const handleSubmit = async () => {
+    setSubmitError(null);
     if (!ticket.ticketNumber || !ticket.partner || ticket.items.length === 0) {
         alert("Vui lòng điền đủ: Số phiếu, Đối tác (NCC/Khoa) và ít nhất 1 thiết bị.");
         return;
     }
 
     if (!scriptUrl) {
-         alert("Lỗi: Chưa tìm thấy Script URL. Hãy đảm bảo URL đã được nhập trong sheet DMDC!A2 và tải lại trang.");
+         setSubmitError("Lỗi: Chưa tìm thấy Script URL. Hãy đảm bảo URL đã được nhập trong sheet DMDC!A2.");
          return;
     }
 
     setIsSubmitting(true);
     try {
-        const rowsToSave = ticket.items.map((item) => {
-            const qty = Number(item.quantity) || 0;
-            const price = Number(item.price) || 0;
-            
-            // Chuyển đổi loại phiếu PN/PX thành text hiển thị
+        const rowsToSave = ticket.items.map((item, index) => {
             const ticketTypeLabel = ticket.ticketType === 'PN' ? 'Phiếu nhập' : 'Phiếu xuất';
+            
+            // TẠO STT CỤC BỘ: 1, 2, 3... cho các thiết bị trong phiếu này
+            const stt = index + 1;
 
-            // NOTE: Add empty string first to account for Column A (STT).
-            // Then Type goes to B, Partner to C, etc.
-            // This fixes "Writes A:S" issue and aligns to B:R (assuming script appends array)
-            return [
-                "", // A: STT (Empty for now)
-                ticketTypeLabel, // B: Ghi "Phiếu nhập" hoặc "Phiếu xuất"
-                ticket.partner,    // C
-                ticket.section,    // D
-                ticket.ticketNumber,// E
-                ticket.date,       // F 
-                item.deviceCode,   // G
-                item.deviceName,   // H
-                item.details,      // I
-                item.unit,         // J
-                item.manufacturer, // K
-                item.country,      // L
-                item.modelSerial,  // M
-                item.warranty,     // N 
-                item.quantity,     // O
-                item.price,        // P
-                item.total,        // Q
-                item.notes         // R
+            // Xây dựng mảng dữ liệu đầy đủ 18 cột (A->R)
+            const rowData = [
+                stt,                         // A: STT (Số thứ tự trong phiếu)
+                String(ticketTypeLabel),     // B: Loại phiếu
+                String(ticket.partner || ''), // C: Đối tác
+                String(ticket.section || ''), // D: Bộ phận
+                String(ticket.ticketNumber || ''), // E: Số phiếu
+                String(ticket.date || ''),   // F: Ngày
+                String(item.deviceCode || ''), // G: Mã TB
+                String(item.deviceName || ''), // H: Tên TB
+                String(item.details || ''),  // I: Chi tiết
+                String(item.unit || ''),     // J: ĐVT
+                String(item.manufacturer || ''), // K: Hãng
+                String(item.country || ''),  // L: Nước
+                String(item.modelSerial || ''), // M: Model
+                String(item.warranty || ''), // N: Bảo hành
+                Number(item.quantity || 0),  // O: SL
+                Number(item.price || 0),     // P: Giá
+                Number(item.total || 0),     // Q: Thành tiền
+                String(item.notes || '')     // R: Ghi chú
             ];
+
+            // LUÔN LUÔN CẮT CHÍNH XÁC 18 CỘT (Index 0 đến 17: Cột A đến Cột R)
+            // Kể cả phiếu xuất hay nhập đều phải gửi đủ 18 cột để đảm bảo STT và Ghi chú không bị lệch.
+            // Cột S (19) sẽ không bị chạm tới.
+            return rowData.slice(0, 18);
         });
 
         await saveToGoogleSheet({
             action: 'create_ticket',
+            sheetName: 'DULIEU',
             rows: rowsToSave
         }, scriptUrl);
 
-        alert("Đã gửi dữ liệu thành công!");
+        alert(`Đã lưu ${ticket.items.length} thiết bị thành công!`);
         
-        // Regenerate ticket number for next input
-        // Note: rowsToSave now has A..R (18 columns). rawDulieu has A..U.
-        // We need to convert them to strings to match type signature
+        // Update local state to reflect changes immediately
         const rowsForState = rowsToSave.map(r => r.map(String));
+        // Append new data locally for calculation
+        const newRawData = [...rawDulieu, ...rowsForState];
         
         const nextTicket = generateNextTicketNumber(
             isImport ? 'import' : 'export', 
-            [...rawDulieu, ...rowsForState]
+            newRawData
         );
         
-        setRawDulieu(prev => [...prev, ...rowsForState]); // optimistic update raw data
-
+        setRawDulieu(newRawData); 
         setTicket(prev => ({...prev, ticketNumber: nextTicket, items: []}));
         
-        // Optimistic Update Inventory
         if (!isImport) {
              const newMap = new Map<string, number>(inventoryMap);
              ticket.items.forEach(item => {
@@ -479,7 +493,8 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
         }
 
     } catch (e: any) {
-        alert("Lỗi khi lưu: " + e.message);
+        console.error(e);
+        setSubmitError(e.message);
     } finally {
         setIsSubmitting(false);
     }
@@ -608,14 +623,17 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
         </div>
       </div>
 
-      {/* Input Device Form */}
+      {/* Input Device Form - RE-LAYOUT 3 ROWS */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6">
         <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
             <Plus className="w-5 h-5 bg-blue-100 text-blue-600 rounded-full p-1" />
             Chi tiết thiết bị {isImport ? '(Nhập Mới)' : '(Chọn Từ Tồn Kho)'}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 bg-slate-50 p-4 rounded-lg border border-slate-200">
-            <div className="md:col-span-2">
+             
+             {/* --- ROW 1: Mã, Tên, Chi tiết, ĐVT, Model --- */}
+             
+             <div className="md:col-span-2">
                  <label className="text-xs text-slate-500 font-bold mb-1 h-6 flex items-center">Mã TB</label>
                  <div className="relative">
                     <input 
@@ -628,7 +646,7 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
                     <Search className="w-3 h-3 absolute left-3 top-3 text-slate-400" />
                  </div>
             </div>
-            <div className="md:col-span-4">
+            <div className="md:col-span-3">
                  <label className="text-xs text-slate-500 font-bold mb-1 h-6 flex items-center">
                     Tên thiết bị *
                     {currentStockDisplay}
@@ -644,7 +662,7 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
                     <Search className="w-3 h-3 absolute left-3 top-3 text-slate-400" />
                  </div>
             </div>
-            <div className="md:col-span-4">
+            <div className="md:col-span-3">
                  <label className="text-xs text-slate-500 mb-1 h-6 flex items-center">Thông tin chi tiết</label>
                  <input 
                     value={currentItem.details}
@@ -663,13 +681,16 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
             </div>
             
              <div className="md:col-span-2">
-                 <label className="text-xs text-slate-500 mb-1 h-6 flex items-center">Model</label>
+                 <label className="text-xs text-slate-500 mb-1 h-6 flex items-center">Model / Serial</label>
                  <input 
                     value={currentItem.modelSerial}
                     onChange={e => setCurrentItem({...currentItem, modelSerial: e.target.value})}
                     className="w-full h-9 px-3 border border-slate-300 rounded text-sm"
                  />
             </div>
+
+            {/* --- ROW 2: Hãng, Nước, Bảo hành, SL, Đơn giá, Thành tiền --- */}
+
              <div className="md:col-span-2">
                  <label className="text-xs text-slate-500 mb-1 h-6 flex items-center">Hãng SX</label>
                  <input 
@@ -698,7 +719,6 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
                  />
             </div>
             
-             {/* Extended Grid Columns for Price & Total */}
              <div className="md:col-span-2">
                  <label className="text-xs text-slate-500 font-bold text-blue-600 mb-1 h-6 flex items-center">Số lượng</label>
                  <input 
@@ -711,7 +731,7 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
                     className="w-full h-9 px-3 border border-blue-300 rounded text-sm font-bold text-center"
                  />
             </div>
-             <div className="md:col-span-3">
+             <div className="md:col-span-2">
                  <label className="text-xs text-slate-500 mb-1 h-6 flex items-center">Đơn giá</label>
                  <div className="relative">
                     <input 
@@ -727,14 +747,28 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
                     <span className="absolute right-2 top-2.5 text-slate-400 text-xs">₫</span>
                  </div>
             </div>
-             <div className="md:col-span-4">
+             <div className="md:col-span-2">
                 <label className="text-xs text-slate-500 mb-1 h-6 flex items-center">Thành tiền</label>
                 <div className="w-full h-9 px-3 bg-slate-100 border border-slate-200 rounded text-sm text-right font-bold text-slate-800 font-mono flex items-center justify-end">
                     {formatNumber((currentItem.quantity || 0) * (currentItem.price || 0))} ₫
                 </div>
              </div>
+
+            {/* --- ROW 3: Ghi chú, Button --- */}
+
+             <div className="md:col-span-9">
+                 <label className="text-xs text-slate-500 font-bold mb-1 h-6 flex items-center">Ghi chú (Cột R)</label>
+                 <div className="relative">
+                    <StickyNote className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                    <input 
+                        value={currentItem.notes}
+                        onChange={e => setCurrentItem({...currentItem, notes: e.target.value})}
+                        className="w-full h-9 pl-9 pr-3 border border-slate-300 rounded text-sm"
+                        placeholder="Nhập ghi chú hoặc link file..."
+                    />
+                 </div>
+            </div>
              
-             {/* Button on the same row */}
              <div className="md:col-span-3 flex items-end">
                 <button 
                     onClick={addItem}
@@ -749,6 +783,13 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
 
       {/* Table Items */}
       <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+        {submitError && (
+            <div className="bg-red-50 p-4 border-b border-red-100 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
+                <div className="text-sm text-red-700 whitespace-pre-line">{submitError}</div>
+            </div>
+        )}
+
         <div className="overflow-auto flex-1">
             <table className="w-full text-left text-sm">
                 <thead className="bg-emerald-50 text-emerald-700 font-semibold uppercase text-xs sticky top-0 border-b border-emerald-100">
@@ -756,7 +797,7 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
                         <th className="p-3 w-10">#</th>
                         <th className="p-3">Mã TB</th>
                         <th className="p-3">Tên Thiết Bị / Chi tiết</th>
-                        <th className="p-3">Bảo hành</th>
+                        <th className="p-3">Ghi chú</th>
                         <th className="p-3 w-28 text-right">Đơn giá</th>
                         <th className="p-3 w-20 text-right">SL</th>
                         <th className="p-3 w-32 text-right">Thành tiền</th>
@@ -772,7 +813,7 @@ export const WarehouseForm: React.FC<WarehouseFormProps> = ({ type, sheetId, scr
                                 <div className="font-medium text-slate-700">{item.deviceName}</div>
                                 <div className="text-xs text-slate-500 truncate max-w-[200px]">{item.details}</div>
                             </td>
-                            <td className="p-3 text-xs text-slate-600">{item.warranty}</td>
+                            <td className="p-3 text-xs text-slate-500 truncate max-w-[150px]">{item.notes}</td>
                             <td className="p-3 text-right text-slate-600 font-mono">{formatNumber(item.price)}</td>
                             <td className="p-3 text-right font-bold text-blue-600">{item.quantity} {item.unit}</td>
                              <td className="p-3 text-right font-medium text-slate-800 font-mono">{formatNumber(item.total)}</td>

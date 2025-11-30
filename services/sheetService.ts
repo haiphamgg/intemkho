@@ -2,8 +2,18 @@
 // URL API CỐ ĐỊNH (Fallback)
 const FALLBACK_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyqEtmuL0lOwh_Iibgs7oxx0lSC1HG1ubNcPc6KINu8a-aC3adsK9qTRj9LCjX4z7iq/exec";
 
+// Helper to safely get env var
+const getEnvScriptUrl = () => {
+  try {
+    // @ts-ignore
+    return process.env.SCRIPT_URL;
+  } catch (e) {
+    return "";
+  }
+};
+
 // @ts-ignore
-export const SCRIPT_URL = process.env.SCRIPT_URL || FALLBACK_SCRIPT_URL;
+export const SCRIPT_URL = getEnvScriptUrl() || FALLBACK_SCRIPT_URL;
 
 export const fetchGoogleSheetData = async (sheetId: string, sheetNameOrRange: string = 'DULIEU'): Promise<string[][]> => {
   if (!sheetId) {
@@ -56,20 +66,32 @@ export const fetchGoogleSheetData = async (sheetId: string, sheetNameOrRange: st
 export const saveToGoogleSheet = async (data: any, explicitScriptUrl?: string) => {
   // Ưu tiên URL được truyền vào, sau đó đến localStorage, cuối cùng là fallback
   const userScriptUrl = localStorage.getItem('SCRIPT_URL');
-  const targetUrl = explicitScriptUrl || userScriptUrl || SCRIPT_URL;
+  let targetUrl = explicitScriptUrl || userScriptUrl || SCRIPT_URL;
 
   if (!targetUrl || !targetUrl.startsWith('http')) {
     throw new Error("Script URL không hợp lệ. Hãy kiểm tra ô A2 sheet DMDC hoặc cấu hình Admin.");
   }
+  
+  if (targetUrl.startsWith('http:')) {
+      targetUrl = targetUrl.replace('http:', 'https:');
+  }
 
+  if (targetUrl.includes('/edit') || targetUrl.includes('/copy')) {
+      throw new Error("Script URL sai định dạng (link edit). Vui lòng dùng link Web App (kết thúc bằng /exec).");
+  }
+
+  console.log("Sending data to:", targetUrl);
   const payload = JSON.stringify(data);
 
   try {
     const response = await fetch(targetUrl, {
       method: 'POST',
       body: payload,
+      mode: 'cors',
+      credentials: 'omit', // Important for "Anyone" scripts
+      redirect: 'follow',
       headers: {
-        "Content-Type": "text/plain;charset=utf-8",
+        "Content-Type": "text/plain;charset=utf-8", // Simple content type avoids CORS preflight
       },
     });
 
@@ -79,15 +101,15 @@ export const saveToGoogleSheet = async (data: any, explicitScriptUrl?: string) =
 
     const result = await response.json();
     if (result.status === 'error') {
-      throw new Error(result.message || "Lỗi không xác định từ Script");
+      throw new Error(result.message || "Lỗi từ Script");
     }
-    return result;
+    return result; // Success
 
   } catch (error: any) {
     console.error("Error saving to sheet:", error);
     
-    if (error.message === 'Failed to fetch' || error.name === 'TypeError') {
-       throw new Error(`Lỗi kết nối (CORS) đến Script. \n\nNGUYÊN NHÂN THƯỜNG GẶP:\n1. URL trong sheet DMDC!A2 sai.\n2. Script chưa được Deploy đúng cách.\n   -> Hãy vào Script Editor -> Deploy -> New Deployment -> Select type: Web app -> Who has access: "Anyone" (Quan trọng!).`);
+    if (error.name === 'TypeError' || error.message.includes('Failed to fetch')) {
+        throw new Error(`Lỗi kết nối (CORS/Network) - Kiểm tra lại cấu hình Script.\nCó thể do Script bị lỗi server (500) khi xử lý dữ liệu thiếu cột.`);
     }
     
     throw error;

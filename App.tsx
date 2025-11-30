@@ -16,7 +16,7 @@ import { fetchGoogleSheetData } from './services/sheetService';
 import { 
   LayoutGrid, Search as SearchIcon, Database, Sparkles, AlertTriangle, 
   FileText, FolderOpen, Menu, X, Settings, LogOut, QrCode, ChevronRight,
-  LayoutDashboard, FileInput, FileOutput, BarChart3, List, Lock, KeyRound, Link
+  LayoutDashboard, FileInput, FileOutput, BarChart3, List, Lock, KeyRound, Link, ChevronDown, ChevronUp
 } from 'lucide-react';
 
 // CẤU HÌNH CỘT
@@ -84,6 +84,7 @@ export default function App() {
   });
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileTicketListOpen, setMobileTicketListOpen] = useState(false);
   
   // ADMIN STATES
   const [isAdmin, setIsAdmin] = useState(false);
@@ -130,7 +131,6 @@ export default function App() {
       }
 
       // 2. TỰ ĐỘNG LẤY SCRIPT URL TỪ SHEET 'DMDC!A2'
-      // Request range A1:A2. GVIZ coi A1 là header, A2 là data row 0.
       try {
           const configData = await fetchGoogleSheetData(idToUse, 'DMDC!A1:A2');
           if (configData && configData.length > 0 && configData[0][0]) {
@@ -143,7 +143,6 @@ export default function App() {
           }
       } catch (configErr) {
           console.warn("Không tìm thấy Script URL tại DMDC!A2", configErr);
-          // Không báo lỗi chặn UI, dùng fallback hoặc url đã lưu
       }
 
     } catch (err: any) {
@@ -161,7 +160,7 @@ export default function App() {
     localStorage.setItem('SHEET_ID', sheetId);
     localStorage.setItem('VOUCHER_FOLDER_ID', voucherFolderId);
     localStorage.setItem('DOC_FOLDER_ID', docFolderId);
-    localStorage.setItem('SCRIPT_URL', scriptUrl); // Save Script URL
+    localStorage.setItem('SCRIPT_URL', scriptUrl); 
     
     // Save new PIN if provided
     if (newPin && newPin.trim().length >= 4) {
@@ -179,7 +178,7 @@ export default function App() {
 
   const handleSettingsClick = () => {
     if (isAdmin) {
-      setNewPin(''); // Reset pin input when opening
+      setNewPin(''); 
       setShowSettings(true);
     } else {
       setShowLogin(true);
@@ -194,7 +193,7 @@ export default function App() {
       if (remember) {
           localStorage.setItem('IS_ADMIN_PERSIST', 'true');
       }
-      setViewMode('dashboard'); // Redirect to dashboard on login
+      setViewMode('dashboard'); 
       setShowLogin(false);
       return true;
     }
@@ -204,12 +203,11 @@ export default function App() {
   const handleLogout = () => {
     setIsAdmin(false);
     sessionStorage.removeItem('IS_ADMIN');
-    localStorage.removeItem('IS_ADMIN_PERSIST'); // Clear persistent auth
+    localStorage.removeItem('IS_ADMIN_PERSIST'); 
     setShowSettings(false);
-    setViewMode('lookup'); // Redirect to public view
+    setViewMode('lookup'); 
   };
 
-  // Handler khi click vào số phiếu ở trang Tra cứu -> Chuyển sang Kho Chứng Từ
   const handleQuickLookup = (ticket: string) => {
     setVoucherSearchTerm(ticket);
     setViewMode('vouchers');
@@ -320,6 +318,7 @@ export default function App() {
       
       {/* SIDEBAR (Desktop) */}
       <aside className="hidden md:flex flex-col w-64 bg-slate-900 border-r border-slate-800 shrink-0 z-20 transition-all no-print shadow-xl">
+         {/* ... Sidebar Content ... */}
          <div className="p-6 flex items-center gap-3 border-b border-slate-800/50">
              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 text-white transform hover:scale-105 transition-transform duration-300">
                 <Database className="w-6 h-6" />
@@ -329,7 +328,6 @@ export default function App() {
                 <p className="text-[10px] text-slate-400 font-medium tracking-wide uppercase mt-1">V.2.0 Enterprise</p>
              </div>
          </div>
-
          <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
              {isAdmin && (
                  <>
@@ -343,14 +341,12 @@ export default function App() {
                     <SidebarItem mode="master" icon={List} label="Danh Mục" />
                  </>
              )}
-             
              <div className="text-[10px] font-bold text-slate-500 uppercase px-4 mb-2 mt-4 tracking-wider">Tiện Ích & Dữ Liệu</div>
              <SidebarItem mode="print" icon={QrCode} label="In Tem QR" />
              <SidebarItem mode="lookup" icon={SearchIcon} label="Tra Cứu" />
              <SidebarItem mode="vouchers" icon={FileText} label="Kho Chứng Từ" />
-             <SidebarItem mode="drive" icon={FolderOpen} label="Tài Liệu KT" />
+             <SidebarItem mode="drive" icon={FolderOpen} label="Tài Liệu Kỹ thuật" />
          </nav>
-
          <div className="p-4 border-t border-slate-800/50">
             <button 
                 onClick={handleSettingsClick}
@@ -409,7 +405,7 @@ export default function App() {
                      <SidebarItem mode="print" icon={QrCode} label="In Tem QR" />
                      <SidebarItem mode="lookup" icon={SearchIcon} label="Tra Cứu" />
                      <SidebarItem mode="vouchers" icon={FileText} label="Kho Chứng Từ" />
-                     <SidebarItem mode="drive" icon={FolderOpen} label="Tài Liệu KT" />
+                     <SidebarItem mode="drive" icon={FolderOpen} label="Tài Liệu Kỹ thuật" />
                  </div>
                  <div className="pt-4 border-t border-slate-800">
                      <button onClick={handleSettingsClick} className="flex items-center gap-3 text-slate-400 px-4 py-2 w-full">
@@ -425,6 +421,7 @@ export default function App() {
       <div className="flex-1 flex flex-col min-w-0 bg-slate-100 relative pt-14 md:pt-0">
          {/* TOP BAR (Desktop) */}
          <header className="hidden md:flex h-16 bg-white border-b border-slate-200 px-6 items-center justify-between shrink-0 no-print">
+            {/* ... Desktop Header ... */}
             <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                 {getPageTitle()}
                 {isLoading && <span className="text-xs font-normal text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full animate-pulse">Đang đồng bộ...</span>}
@@ -486,34 +483,16 @@ export default function App() {
                                 URL này được tự động lấy từ ô <b>A2</b> của sheet <b>DMDC</b>. Hãy cập nhật trong file Sheet nếu muốn thay đổi.
                             </p>
                         </div>
-
-                        <div>
+                        {/* Other config inputs */}
+                         <div>
                             <label className="text-sm font-medium text-slate-700 mb-1 block">Google Sheet ID (Dữ liệu)</label>
                             <input 
                                 value={sheetId}
                                 onChange={(e) => setSheetId(e.target.value)}
                                 className="w-full p-2 border border-slate-300 rounded font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             />
-                            <button onClick={() => setSheetId(DEFAULT_SHEET_ID)} className="text-xs text-blue-600 hover:underline mt-1">Khôi phục mặc định</button>
                         </div>
-                        <div>
-                            <label className="text-sm font-medium text-emerald-700 mb-1 block">Folder ID (Chứng Từ)</label>
-                            <input 
-                                value={voucherFolderId}
-                                onChange={(e) => setVoucherFolderId(e.target.value)}
-                                className="w-full p-2 border border-emerald-200 bg-emerald-50 rounded font-mono text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
-                            />
-                        </div>
-                        <div>
-                            <label className="text-sm font-medium text-red-700 mb-1 block">Folder ID (Tài Liệu)</label>
-                            <input 
-                                value={docFolderId}
-                                onChange={(e) => setDocFolderId(e.target.value)}
-                                className="w-full p-2 border border-red-200 bg-red-50 rounded font-mono text-sm focus:ring-2 focus:ring-red-500 outline-none"
-                            />
-                        </div>
-                        
-                        <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                         <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                              <label className="text-sm font-bold text-slate-700 mb-1 flex items-center gap-2">
                                 <KeyRound className="w-4 h-4" />
                                 Đổi mã PIN Admin
@@ -525,7 +504,6 @@ export default function App() {
                                 onChange={(e) => setNewPin(e.target.value)}
                                 className="w-full p-2 border border-slate-300 rounded font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             />
-                            <p className="text-[10px] text-slate-400 mt-1 italic">Lưu ý: Mã PIN sẽ được lưu trên trình duyệt này.</p>
                         </div>
 
                         <div className="pt-2 flex gap-2">
@@ -568,13 +546,31 @@ export default function App() {
 
             {viewMode === 'master' && isAdmin && (
                 <div className="h-full animate-in fade-in duration-300">
-                   <MasterData />
+                   <MasterData scriptUrl={scriptUrl} />
                 </div>
             )}
 
             {viewMode === 'print' && (
-              <div className="h-full flex flex-col md:flex-row animate-in fade-in duration-300">
-                <div className="w-full md:w-80 bg-white border-r border-slate-200 p-4 overflow-y-auto flex flex-col gap-4 shrink-0 no-print shadow-xl z-10">
+              <div className="h-full flex flex-col md:flex-row animate-in fade-in duration-300 relative">
+                {/* Mobile Toggle for Ticket List */}
+                <div className="md:hidden bg-white p-2 border-b border-slate-200 flex justify-between items-center shadow-sm z-20">
+                    <span className="text-sm font-bold text-slate-700">Chọn Phiếu In</span>
+                    <button 
+                        onClick={() => setMobileTicketListOpen(!mobileTicketListOpen)}
+                        className="p-1.5 bg-slate-100 rounded text-slate-600"
+                    >
+                        {mobileTicketListOpen ? <ChevronUp className="w-5 h-5"/> : <ChevronDown className="w-5 h-5"/>}
+                    </button>
+                </div>
+
+                <div className={`w-full md:w-80 bg-white border-b md:border-b-0 md:border-r border-slate-200 p-4 overflow-y-auto flex flex-col gap-4 shrink-0 no-print shadow-xl z-10 
+                    ${mobileTicketListOpen ? 'block absolute inset-0 z-30' : 'hidden md:flex'}
+                `}>
+                  {mobileTicketListOpen && (
+                      <div className="md:hidden flex justify-end">
+                          <button onClick={() => setMobileTicketListOpen(false)}><X className="w-6 h-6 text-slate-400"/></button>
+                      </div>
+                  )}
                   <DataInput 
                     onReload={handleLoadData} 
                     isLoading={isLoading} 
@@ -583,27 +579,25 @@ export default function App() {
                     currentSheetId={sheetId}
                     isAdmin={isAdmin}
                   />
-                  <div className="border-t border-slate-100 pt-4">
-                    <TicketSelector tickets={uniqueTickets} selectedTicket={selectedTicket} onSelect={setSelectedTicket} />
+                  <div className="border-t border-slate-100 pt-4 flex-1">
+                    <TicketSelector 
+                        tickets={uniqueTickets} 
+                        selectedTicket={selectedTicket} 
+                        onSelect={(t) => {
+                            setSelectedTicket(t);
+                            setMobileTicketListOpen(false); // Close on selection
+                        }} 
+                    />
                   </div>
-                  {selectedTicket && (
-                    <div className="bg-gradient-to-br from-indigo-50 to-purple-50 p-4 rounded-xl border border-indigo-100 shadow-sm mt-auto">
-                      <div className="flex items-center gap-2 mb-2 text-indigo-700">
-                        <Sparkles className="w-4 h-4" />
-                        <h3 className="font-semibold text-sm">AI Phân Tích</h3>
-                      </div>
-                      <div className="text-xs text-slate-700 whitespace-pre-line leading-relaxed">
-                        {isAnalyzing ? "Gemini đang phân tích dữ liệu..." : aiAnalysis}
-                      </div>
-                    </div>
-                  )}
                 </div>
-                <main className="flex-1 bg-slate-100 overflow-hidden p-4 print:p-0 print:bg-white">
-                  <QRGrid items={selectedItems} selectedTicket={selectedTicket} />
+
+                <main className="flex-1 bg-slate-100 overflow-hidden p-2 md:p-4 print:p-0 print:bg-white flex flex-col">
+                   <QRGrid items={selectedItems} selectedTicket={selectedTicket} />
                 </main>
               </div>
             )}
-
+            
+            {/* Other views remain unchanged */}
             {viewMode === 'lookup' && (
               <div className="h-full animate-in fade-in duration-300">
                 <LookupPage 

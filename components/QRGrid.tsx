@@ -98,14 +98,14 @@ export const QRGrid: React.FC<QRGridProps> = ({ items, selectedTicket }) => {
   return (
     <div className="h-full flex flex-col">
       {/* Modern Toolbar */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 mb-4 mx-2 flex flex-col sm:flex-row justify-between items-center gap-4 no-print shrink-0">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 mb-2 md:mb-4 mx-0 md:mx-2 flex flex-col sm:flex-row justify-between items-center gap-4 no-print shrink-0">
          <div className="flex items-center gap-3 w-full sm:w-auto">
              <div className="bg-blue-50 text-blue-600 p-2 rounded-lg">
                  <Tag className="w-5 h-5" />
              </div>
              <div>
                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Đang chọn phiếu</p>
-                 <h3 className="font-bold text-slate-800 text-base">{selectedTicket}</h3>
+                 <h3 className="font-bold text-slate-800 text-sm md:text-base">{selectedTicket}</h3>
              </div>
              <div className="h-8 w-[1px] bg-slate-200 mx-1 hidden sm:block"></div>
              <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-xs font-bold border border-slate-200">
@@ -120,7 +120,7 @@ export const QRGrid: React.FC<QRGridProps> = ({ items, selectedTicket }) => {
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg text-sm font-semibold shadow-sm transition-all active:scale-95 disabled:opacity-50"
               >
                 {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
-                <span className="hidden sm:inline">Lưu PDF</span>
+                <span className="inline sm:inline">Lưu PDF</span>
               </button>
 
               <button
@@ -134,10 +134,10 @@ export const QRGrid: React.FC<QRGridProps> = ({ items, selectedTicket }) => {
       </div>
 
       {/* Grid Area */}
-      <div className="flex-1 overflow-auto bg-slate-100/50 p-4 rounded-xl border-2 border-dashed border-slate-200 mx-2 mb-2 no-scrollbar print:bg-white print:p-0 print:border-none print:overflow-visible print:mx-0 print:mb-0">
+      <div className="flex-1 overflow-auto bg-slate-100/50 p-2 md:p-4 rounded-xl border-2 border-dashed border-slate-200 mx-0 md:mx-2 mb-2 no-scrollbar print:bg-white print:p-0 print:border-none print:overflow-visible print:mx-0 print:mb-0">
         <div 
           id="printable-area" 
-          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 w-full bg-white p-6 shadow-sm rounded-lg sm:bg-transparent sm:p-0 sm:shadow-none"
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4 md:gap-6 w-full bg-white p-4 md:p-6 shadow-sm rounded-lg sm:bg-transparent sm:p-0 sm:shadow-none"
         >
           {items.map((item) => {
              const isLink = isImageUrl(item.qrContent);

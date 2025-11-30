@@ -163,7 +163,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ data, lastUpdated,
                 <div>
                     <p className="text-sm font-bold text-indigo-700">Mẹo quản lý</p>
                     <p className="text-xs text-indigo-600/80 mt-1 leading-relaxed">
-                        Sử dụng chức năng "Tra cứu" để tìm nhanh tài sản theo Model hoặc Serial.
+                        Sử dụng chức năng "Tra cứu" để tìm nhanh thiết bị theo Model hoặc Serial.
                     </p>
                 </div>
             </div>

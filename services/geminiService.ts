@@ -1,14 +1,18 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { DeviceRow } from "../types";
 
-// Remove global initialization to prevent crash on load if process.env is missing in browser
-// const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 export const analyzeTicketData = async (ticketId: string, items: DeviceRow[]): Promise<string> => {
   try {
-    // Initialize inside the function
-    // @ts-ignore - process.env is replaced by Vite at build time
-    const apiKey = process.env.API_KEY;
+    // Initialize inside the function to avoid top-level crashes
+    let apiKey = '';
+    try {
+        // @ts-ignore - process.env is replaced by Vite at build time
+        apiKey = process.env.API_KEY;
+    } catch (e) {
+        // process is not defined
+        console.warn("API Key not found in env");
+    }
     
     if (!apiKey) {
       return "Chưa cấu hình API Key.";

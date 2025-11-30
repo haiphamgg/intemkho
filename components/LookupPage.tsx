@@ -46,7 +46,7 @@ export const LookupPage: React.FC<LookupPageProps> = ({ data, onReload, isLoadin
                <Package className="w-6 h-6" />
             </div>
             <div>
-               <h2 className="text-lg font-bold text-slate-800">Tra Cứu Tài Sản</h2>
+               <h2 className="text-lg font-bold text-slate-800">Tra Cứu thiết bị</h2>
                <div className="flex items-center gap-3 text-xs text-slate-500 mt-1">
                   <span className="flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded-full font-medium">
                      <Box className="w-3 h-3" /> {data.length} thiết bị

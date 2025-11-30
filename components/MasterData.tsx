@@ -94,6 +94,10 @@ interface RowData {
   values: string[];
 }
 
+interface MasterDataProps {
+  scriptUrl?: string;
+}
+
 // Modal Component cho việc sửa Thiết bị
 const DeviceEditModal = ({ 
     initialData, 
@@ -229,7 +233,7 @@ const DeviceEditModal = ({
     );
 };
 
-export const MasterData: React.FC = () => {
+export const MasterData: React.FC<MasterDataProps> = ({ scriptUrl }) => {
   const [activeTabId, setActiveTabId] = useState<TabID>('DEVICE');
   const [data, setData] = useState<RowData[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -343,7 +347,7 @@ export const MasterData: React.FC = () => {
                sheetName: 'DANHMUC',
                rowIndex: deviceModalData.originalIndex, 
                row: fullRow
-          });
+          }, scriptUrl);
           alert("Cập nhật thiết bị thành công!");
           setShowDeviceModal(false);
           setDeviceModalData(null);
@@ -379,7 +383,7 @@ export const MasterData: React.FC = () => {
             rowIndex: editingRowIndex,
             colIndex: activeConfig.colIndex,
             value: formData[0]
-        });
+        }, scriptUrl);
         alert("Cập nhật thành công!");
         handleCancelInline();
 
@@ -393,14 +397,14 @@ export const MasterData: React.FC = () => {
             action: 'add_master_device',
             sheetName: 'DANHMUC',
             row: rowToSave
-          });
+          }, scriptUrl);
         } else {
           await saveToGoogleSheet({
             action: 'add_master_dmdc',
             sheetName: 'DMDC',
             colIndex: activeConfig.colIndex,
             value: formData[0]
-          });
+          }, scriptUrl);
         }
         alert("Thêm mới thành công!");
         setFormData({});
