@@ -35,6 +35,10 @@ const DEFAULT_SCRIPT_URL_DEMO = "https://script.google.com/macros/s/AKfycbyqEtmu
 
 const DEFAULT_ADMIN_PIN = "@3647"; 
 
+// --- CẤU HÌNH API KEY CHO AI ---
+// Bạn có thể thay đổi key này trực tiếp tại đây
+const USER_API_KEY = "AIzaSyAF5gvD_y7IElH3IK-4UTiSm9SMxeUg1ac";
+
 type ViewMode = 'dashboard' | 'print' | 'lookup' | 'vouchers' | 'drive' | 'warehouse-in' | 'warehouse-out' | 'report' | 'master';
 
 // Hàm tiện ích format ngày tháng
@@ -76,11 +80,8 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-      // Logic khởi tạo viewMode: nếu đã lưu admin persist -> dashboard, ngược lại kiểm tra session
-      if (localStorage.getItem('IS_ADMIN_PERSIST') === 'true' || sessionStorage.getItem('IS_ADMIN') === 'true') {
-          return 'dashboard';
-      }
-      return 'lookup';
+      // Mặc định khách vào sẽ thấy Dashboard
+      return 'dashboard';
   });
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -105,8 +106,9 @@ export default function App() {
     } else {
         if (isAdmin) setIsAdmin(false);
         // If not admin and current view is restricted, redirect to lookup
-        if (['dashboard', 'warehouse-in', 'warehouse-out', 'report', 'master'].includes(viewMode)) {
-            setViewMode('lookup');
+        // DASHBOARD is now allowed for guests
+        if (['warehouse-in', 'warehouse-out', 'report', 'master'].includes(viewMode)) {
+            setViewMode('dashboard');
         }
     }
   }, [isAdmin, viewMode]);
@@ -205,7 +207,7 @@ export default function App() {
     sessionStorage.removeItem('IS_ADMIN');
     localStorage.removeItem('IS_ADMIN_PERSIST'); 
     setShowSettings(false);
-    setViewMode('lookup'); 
+    setViewMode('dashboard'); 
   };
 
   const handleQuickLookup = (ticket: string) => {
@@ -268,7 +270,8 @@ export default function App() {
     if (viewMode === 'print' && selectedTicket && selectedItems.length > 0) {
       const runAnalysis = async () => {
         setIsAnalyzing(true);
-        const result = await analyzeTicketData(selectedTicket, selectedItems);
+        // Sử dụng User Key nếu có, fallback về env hoặc mặc định
+        const result = await analyzeTicketData(selectedTicket, selectedItems, USER_API_KEY);
         setAiAnalysis(result);
         setIsAnalyzing(false);
       };
@@ -329,23 +332,24 @@ export default function App() {
              </div>
          </div>
          <nav className="flex-1 p-4 space-y-1 overflow-y-auto custom-scrollbar">
+             {/* Public Items */}
+             <SidebarItem mode="dashboard" icon={LayoutDashboard} label="Dashboard" />
+             <SidebarItem mode="print" icon={QrCode} label="In Tem QR" />
+             <SidebarItem mode="lookup" icon={SearchIcon} label="Tra Cứu" />
+             <SidebarItem mode="vouchers" icon={FileText} label="Kho Chứng Từ" />
+             <SidebarItem mode="drive" icon={FolderOpen} label="Tài Liệu Kỹ thuật" />
+
              {isAdmin && (
                  <>
-                    <div className="text-[10px] font-bold text-slate-500 uppercase px-4 mb-2 mt-2 tracking-wider flex items-center gap-2">
+                    <div className="text-[10px] font-bold text-slate-500 uppercase px-4 mb-2 mt-4 tracking-wider flex items-center gap-2">
                         <Lock className="w-3 h-3"/> Quản Trị
                     </div>
-                    <SidebarItem mode="dashboard" icon={LayoutDashboard} label="Dashboard" />
                     <SidebarItem mode="report" icon={BarChart3} label="Báo Cáo Tồn" />
                     <SidebarItem mode="warehouse-in" icon={FileInput} label="Nhập Kho" />
                     <SidebarItem mode="warehouse-out" icon={FileOutput} label="Xuất Kho" />
                     <SidebarItem mode="master" icon={List} label="Danh Mục" />
                  </>
              )}
-             <div className="text-[10px] font-bold text-slate-500 uppercase px-4 mb-2 mt-4 tracking-wider">Tiện Ích & Dữ Liệu</div>
-             <SidebarItem mode="print" icon={QrCode} label="In Tem QR" />
-             <SidebarItem mode="lookup" icon={SearchIcon} label="Tra Cứu" />
-             <SidebarItem mode="vouchers" icon={FileText} label="Kho Chứng Từ" />
-             <SidebarItem mode="drive" icon={FolderOpen} label="Tài Liệu Kỹ thuật" />
          </nav>
          <div className="p-4 border-t border-slate-800/50">
             <button 
@@ -390,22 +394,22 @@ export default function App() {
                      <button onClick={() => setMobileMenuOpen(false)}><X className="w-6 h-6 text-slate-400" /></button>
                  </div>
                  <div className="space-y-2 flex-1 overflow-y-auto">
-                     {isAdmin && (
-                         <>
-                             <div className="text-xs font-bold text-slate-500 uppercase px-2 mb-1">Quản trị</div>
-                             <SidebarItem mode="dashboard" icon={LayoutDashboard} label="Dashboard" />
-                             <SidebarItem mode="report" icon={BarChart3} label="Báo Cáo Tồn" />
-                             <SidebarItem mode="warehouse-in" icon={FileInput} label="Nhập Kho" />
-                             <SidebarItem mode="warehouse-out" icon={FileOutput} label="Xuất Kho" />
-                             <SidebarItem mode="master" icon={List} label="Danh Mục" />
-                             <div className="my-2 border-t border-slate-800"></div>
-                         </>
-                     )}
-                     <div className="text-xs font-bold text-slate-500 uppercase px-2 mb-1">Tiện ích</div>
+                     <SidebarItem mode="dashboard" icon={LayoutDashboard} label="Dashboard" />
+                     <div className="text-xs font-bold text-slate-500 uppercase px-2 mb-1 mt-2">Tiện ích</div>
                      <SidebarItem mode="print" icon={QrCode} label="In Tem QR" />
                      <SidebarItem mode="lookup" icon={SearchIcon} label="Tra Cứu" />
                      <SidebarItem mode="vouchers" icon={FileText} label="Kho Chứng Từ" />
                      <SidebarItem mode="drive" icon={FolderOpen} label="Tài Liệu Kỹ thuật" />
+
+                     {isAdmin && (
+                         <>
+                             <div className="text-xs font-bold text-slate-500 uppercase px-2 mb-1 mt-2">Quản trị</div>
+                             <SidebarItem mode="report" icon={BarChart3} label="Báo Cáo Tồn" />
+                             <SidebarItem mode="warehouse-in" icon={FileInput} label="Nhập Kho" />
+                             <SidebarItem mode="warehouse-out" icon={FileOutput} label="Xuất Kho" />
+                             <SidebarItem mode="master" icon={List} label="Danh Mục" />
+                         </>
+                     )}
                  </div>
                  <div className="pt-4 border-t border-slate-800">
                      <button onClick={handleSettingsClick} className="flex items-center gap-3 text-slate-400 px-4 py-2 w-full">
@@ -522,8 +526,14 @@ export default function App() {
             )}
 
             {/* VIEWS */}
-            {viewMode === 'dashboard' && isAdmin && (
-                <DashboardHome data={parsedData} lastUpdated={lastUpdated} onNavigate={setViewMode} />
+            {viewMode === 'dashboard' && (
+                <DashboardHome 
+                    data={parsedData} 
+                    lastUpdated={lastUpdated} 
+                    onNavigate={setViewMode} 
+                    isAdmin={isAdmin} 
+                    apiKey={USER_API_KEY} 
+                />
             )}
 
             {viewMode === 'warehouse-in' && isAdmin && (

@@ -2,23 +2,25 @@
 import { GoogleGenAI } from "@google/genai";
 import { DeviceRow } from "../types";
 
-export const analyzeTicketData = async (ticketId: string, items: DeviceRow[]): Promise<string> => {
-  try {
-    // Initialize inside the function to avoid top-level crashes
-    let apiKey = '';
+// Helper to get key (priority: argument -> env)
+const getApiKey = (passedKey?: string) => {
+    if (passedKey) return passedKey;
     try {
-        // @ts-ignore - process.env is replaced by Vite at build time
-        apiKey = process.env.API_KEY;
-    } catch (e) {
-        // process is not defined
-        console.warn("API Key not found in env");
+        // @ts-ignore
+        return process.env.API_KEY || '';
+    } catch {
+        return '';
     }
-    
-    if (!apiKey) {
+}
+
+export const analyzeTicketData = async (ticketId: string, items: DeviceRow[], apiKey?: string): Promise<string> => {
+  try {
+    const key = getApiKey(apiKey);
+    if (!key) {
       return "Chưa cấu hình API Key.";
     }
 
-    const ai = new GoogleGenAI({ apiKey: apiKey });
+    const ai = new GoogleGenAI({ apiKey: key });
 
     const itemSummary = items.map(i => `- Device: ${i.deviceName} (QR: ${i.qrContent})`).join('\n');
     
@@ -45,3 +47,30 @@ export const analyzeTicketData = async (ticketId: string, items: DeviceRow[]): P
     return "Lỗi khi kết nối với AI.";
   }
 };
+
+export const askGemini = async (question: string, contextData: string, apiKey?: string): Promise<string> => {
+    try {
+        const key = getApiKey(apiKey);
+        if (!key) return "Vui lòng cấu hình API Key trong file App.tsx";
+
+        const ai = new GoogleGenAI({ apiKey: key });
+        const prompt = `
+            Bạn là một trợ lý ảo quản lý kho thông minh. Dưới đây là dữ liệu tóm tắt hiện tại của kho:
+            ${contextData}
+
+            Người dùng hỏi: "${question}"
+
+            Hãy trả lời ngắn gọn, thân thiện và đi thẳng vào vấn đề. Nếu câu hỏi không liên quan đến dữ liệu kho, hãy từ chối lịch sự.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+
+        return response.text || "AI không phản hồi.";
+    } catch (error) {
+        console.error("Chat error", error);
+        return "Xin lỗi, tôi đang gặp sự cố kết nối.";
+    }
+}
