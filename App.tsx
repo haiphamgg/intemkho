@@ -627,6 +627,7 @@ export default function App() {
                         title="Kho Chứng Từ" 
                         description="Biên bản, Phiếu xuất/nhập kho (PDF)" 
                         initialSearch={voucherSearchTerm}
+                        transactionData={parsedData} // Pass transaction data here
                    />
                </div>
             )}

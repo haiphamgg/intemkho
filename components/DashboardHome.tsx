@@ -5,7 +5,7 @@ import {
   BarChart3, PieChart, Activity, Users, 
   Package, FileSpreadsheet, TrendingUp, Calendar, ArrowRight,
   Trophy, Medal, Star, Zap, Clock, DollarSign, ArrowDownCircle,
-  Bot, Sparkles, Send, Loader2
+  Bot, Sparkles, Send, Loader2, ArrowUpCircle
 } from 'lucide-react';
 import { askGemini } from '../services/geminiService';
 
@@ -81,21 +81,30 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ data, lastUpdated,
         .sort((a, b) => b[1] - a[1])
         .slice(0, 5);
 
-    // --- LOGIC TOP 10 MẶT HÀNG (SẮP XẾP THEO SỐ TIỀN) ---
+    // --- LOGIC TOP 10 MẶT HÀNG & TỔNG GIÁ TRỊ NHẬP/XUẤT ---
     const itemStats: Record<string, { count: number, totalMoney: number }> = {};
-    
     let maxMoney = 0;
+    
+    let globalImportValue = 0;
+    let globalExportValue = 0;
 
     data.forEach(d => {
-        // Lọc bỏ phiếu Xuất (PX)
-        if (d.ticketNumber.toUpperCase().startsWith('PX')) return;
-
-        if (!d.deviceName) return;
-        const name = d.deviceName;
-        
         const qty = parseNumber(d.fullData[14]) || 1;
         const money = parseNumber(d.fullData[16]) || 0;
+        const isExport = d.ticketNumber.toUpperCase().startsWith('PX');
 
+        // Tính tổng giá trị toàn cục
+        if (isExport) {
+            globalExportValue += money;
+        } else {
+            globalImportValue += money;
+        }
+
+        // Logic Top 10 (Chỉ tính hàng nhập/tồn, bỏ qua phiếu xuất để tránh số âm hoặc sai lệch top)
+        if (isExport) return;
+        if (!d.deviceName) return;
+        
+        const name = d.deviceName;
         if (!itemStats[name]) {
             itemStats[name] = { count: 0, totalMoney: 0 };
         }
@@ -120,7 +129,9 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ data, lastUpdated,
         recentActivities, 
         topDepts,
         topItems,
-        maxMoney
+        maxMoney,
+        globalImportValue,
+        globalExportValue
     };
   }, [data]);
 
@@ -131,6 +142,8 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ data, lastUpdated,
       const context = `
         Tổng thiết bị: ${stats.totalDevices}. 
         Tổng phiếu: ${stats.uniqueTickets}.
+        Giá trị nhập kho: ${formatCurrency(stats.globalImportValue)}.
+        Giá trị xuất kho: ${formatCurrency(stats.globalExportValue)}.
         Top 3 mặt hàng giá trị nhất: ${stats.topItems.slice(0,3).map(i => i[0]).join(', ')}.
         Hoạt động gần nhất: ${stats.recentActivities[0]?.ticket} (${stats.recentActivities[0]?.displayItems}).
       `;
@@ -165,6 +178,11 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ data, lastUpdated,
       if (rank === 3) return <Medal className="w-5 h-5 text-amber-700 fill-amber-600 drop-shadow-sm" />;
       return <span className="w-5 h-5 flex items-center justify-center text-xs font-bold text-slate-400 bg-slate-100 rounded-full">{rank}</span>;
   };
+
+  // Helper cho biểu đồ giá trị
+  const maxValue = Math.max(stats.globalImportValue, stats.globalExportValue) || 1;
+  const impPercent = Math.round((stats.globalImportValue / maxValue) * 100);
+  const expPercent = Math.round((stats.globalExportValue / maxValue) * 100);
 
   return (
     <div className="p-4 md:p-8 overflow-y-auto h-full bg-slate-50/50 font-sans">
@@ -438,7 +456,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ data, lastUpdated,
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-fit">
                 <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
                     <PieChart className="w-5 h-5 text-purple-500" />
-                    Phân Bổ Tài Sản
+                    Phân Bổ Thiết bị
                 </h3>
                 <div className="space-y-6">
                     {stats.topDepts.length > 0 ? (
@@ -467,6 +485,55 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ data, lastUpdated,
                     ) : (
                         <div className="text-center py-10 text-slate-400">Chưa có dữ liệu</div>
                     )}
+                </div>
+            </div>
+
+            {/* IMPORT / EXPORT VALUE CHART */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-fit">
+                <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-yellow-500 fill-yellow-100" />
+                    Giá Trị Nhập / Xuất
+                </h3>
+                <div className="space-y-5">
+                    
+                    {/* Import Bar */}
+                    <div>
+                        <div className="flex justify-between items-end mb-1.5">
+                            <span className="text-sm font-semibold text-slate-600 flex items-center gap-1.5">
+                                <ArrowDownCircle className="w-3.5 h-3.5 text-emerald-500"/> Tổng Nhập
+                            </span>
+                            <span className="text-emerald-700 font-bold font-mono text-sm">
+                                {formatCurrency(stats.globalImportValue)}
+                            </span>
+                        </div>
+                        <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                            <div 
+                                className="h-full bg-emerald-500 rounded-full transition-all duration-1000" 
+                                style={{ width: `${impPercent}%` }}
+                            ></div>
+                        </div>
+                    </div>
+
+                    {/* Export Bar */}
+                    <div>
+                        <div className="flex justify-between items-end mb-1.5">
+                            <span className="text-sm font-semibold text-slate-600 flex items-center gap-1.5">
+                                <ArrowUpCircle className="w-3.5 h-3.5 text-orange-500"/> Tổng Xuất
+                            </span>
+                            <span className="text-orange-700 font-bold font-mono text-sm">
+                                {formatCurrency(stats.globalExportValue)}
+                            </span>
+                        </div>
+                        <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+                            <div 
+                                className="h-full bg-orange-500 rounded-full transition-all duration-1000" 
+                                style={{ width: `${expPercent}%` }}
+                            ></div>
+                        </div>
+                    </div>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-50 text-[10px] text-slate-400 italic text-center">
+                    * Tính trên tổng dữ liệu (Cột Thành tiền)
                 </div>
             </div>
 

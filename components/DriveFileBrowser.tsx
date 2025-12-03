@@ -3,9 +3,10 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   FileText, Image as ImageIcon, File, User, 
   Search, RefreshCw, Settings, AlertCircle, 
-  Loader2, Eye, X, Download, Printer, Calendar, FolderOpen, ChevronRight
+  Loader2, Eye, X, Download, Printer, Calendar, FolderOpen, ChevronRight,
+  ShoppingCart, Package, List, Gem, ArrowRight
 } from 'lucide-react';
-import { DriveFile } from '../types';
+import { DriveFile, DeviceRow } from '../types';
 import { fetchDriveFiles, formatFileSize, getFileIcon, getDownloadLink, getPrintSource } from '../services/driveService';
 
 const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbyqEtmuL0lOwh_Iibgs7oxx0lSC1HG1ubNcPc6KINu8a-aC3adsK9qTRj9LCjX4z7iq/exec";
@@ -15,9 +16,15 @@ interface DriveFileBrowserProps {
   title: string;
   description: string;
   initialSearch?: string;
+  transactionData?: DeviceRow[]; // Optional prop to link with sheet data
 }
 
-export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, title, description, initialSearch }) => {
+// Helper: Format Currency
+const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+};
+
+export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, title, description, initialSearch, transactionData }) => {
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState(initialSearch || '');
@@ -27,6 +34,9 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
   const [scriptUrl, setScriptUrl] = useState(DEFAULT_API_URL);
   const [showConfig, setShowConfig] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // State cho Hover Tooltip
+  const [hoverInfo, setHoverInfo] = useState<{ id: string, data: any, top: number, left: number } | null>(null);
 
   // Sync initialSearch if it changes from parent
   useEffect(() => {
@@ -41,6 +51,39 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
   const bgColor = isVoucher ? 'bg-emerald-50' : 'bg-blue-50';
   const borderColor = isVoucher ? 'border-emerald-100' : 'border-blue-100';
   const ringColor = isVoucher ? 'focus:ring-emerald-500/20' : 'focus:ring-blue-500/20';
+
+  // --- PRE-CALCULATE TICKET SUMMARIES ---
+  const ticketSummaries = useMemo(() => {
+    if (!transactionData) return {};
+    const map: Record<string, any> = {};
+    
+    // Group items by Ticket Number
+    transactionData.forEach(row => {
+        const t = row.ticketNumber;
+        if (!map[t]) map[t] = { items: [], totalMoney: 0, totalQty: 0 };
+        
+        map[t].items.push(row);
+        
+        // Calc totals
+        const qty = parseFloat(row.fullData[14]?.replace(/,/g, '') || '0') || 0;
+        const money = parseFloat(row.fullData[16]?.replace(/,/g, '') || '0') || 0;
+        
+        map[t].totalQty += qty;
+        map[t].totalMoney += money;
+    });
+
+    // Sort items for each ticket by Money DESC
+    Object.keys(map).forEach(t => {
+        map[t].items.sort((a: any, b: any) => {
+             const valA = parseFloat(a.fullData[16]?.replace(/,/g, '') || '0');
+             const valB = parseFloat(b.fullData[16]?.replace(/,/g, '') || '0');
+             return valB - valA;
+        });
+        map[t].topItems = map[t].items.slice(0, 5); // Take top 5 for hover preview
+    });
+    
+    return map;
+  }, [transactionData]);
 
   const loadFiles = async () => {
     if (!folderId) return;
@@ -70,6 +113,25 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
       (f.lastModifyingUser?.displayName || '').toLowerCase().includes(lowerTerm)
     );
   }, [files, searchTerm]);
+
+  // Handle Hover logic
+  const handleRowMouseEnter = (e: React.MouseEvent, file: DriveFile) => {
+    // Find matched ticket
+    const matchedTicket = Object.keys(ticketSummaries).find(t => file.name.includes(t));
+    if (matchedTicket) {
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        setHoverInfo({
+            id: file.id,
+            data: { ...ticketSummaries[matchedTicket], ticket: matchedTicket },
+            top: rect.top,
+            left: rect.right - 20 // Show slightly to the right/overlap
+        });
+    }
+  };
+
+  const handleRowMouseLeave = () => {
+      setHoverInfo(null);
+  };
 
   const renderIcon = (mimeType: string) => {
     const type = getFileIcon(mimeType);
@@ -119,8 +181,56 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
   };
 
   return (
-    <div className="h-full flex flex-col bg-slate-50/50 p-4 md:p-6 overflow-hidden">
+    <div className="h-full flex flex-col bg-slate-50/50 p-4 md:p-6 overflow-hidden relative">
       <iframe ref={printFrameRef} className="hidden" title="Print Frame" />
+
+      {/* HOVER TOOLTIP PORTAL */}
+      {hoverInfo && (
+          <div 
+            className="fixed z-50 bg-white rounded-xl shadow-2xl border border-slate-200 p-4 w-80 animate-in fade-in zoom-in-95 duration-200 pointer-events-none"
+            style={{ 
+                top: Math.min(window.innerHeight - 300, Math.max(10, hoverInfo.top)), // Keep within view
+                left: Math.min(window.innerWidth - 340, hoverInfo.left + 10) 
+            }}
+          >
+             <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
+                 <div className="flex items-center gap-2 font-bold text-slate-800">
+                     <List className="w-4 h-4 text-emerald-600" />
+                     Phiếu {hoverInfo.data.ticket}
+                 </div>
+                 <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">
+                     {formatCurrency(hoverInfo.data.totalMoney)}
+                 </span>
+             </div>
+             
+             <div className="space-y-2">
+                 <p className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
+                     <Gem className="w-3 h-3"/> Top hàng hóa giá trị
+                 </p>
+                 {hoverInfo.data.topItems.map((item: any, idx: number) => (
+                     <div key={idx} className="flex justify-between items-center text-xs">
+                         <div className="truncate pr-2 text-slate-700 font-medium flex-1">
+                             {item.deviceName}
+                         </div>
+                         <div className="text-slate-500 font-mono text-[10px] whitespace-nowrap">
+                            x{parseFloat(item.fullData[14] || '0')}
+                         </div>
+                     </div>
+                 ))}
+                 
+                 {hoverInfo.data.items.length > 5 && (
+                     <div className="pt-2 border-t border-slate-50 mt-2 text-[10px] text-center text-slate-400 italic">
+                         ...và {hoverInfo.data.items.length - 5} mặt hàng khác
+                     </div>
+                 )}
+                 
+                 <div className="mt-2 pt-2 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
+                     <span>Tổng số lượng:</span>
+                     <span className="font-bold text-slate-700">{hoverInfo.data.totalQty}</span>
+                 </div>
+             </div>
+          </div>
+      )}
 
       {/* Modern Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 shrink-0">
@@ -196,39 +306,59 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
                           <p className="text-sm">Không tìm thấy file nào</p>
                       </div>
                   ) : (
-                      filteredFiles.map((file) => (
-                          <div 
-                              key={file.id}
-                              onClick={() => setSelectedFile(file)}
-                              className={`group flex items-center px-3 py-3 rounded-xl cursor-pointer transition-all border border-transparent ${selectedFile?.id === file.id ? `${bgColor} ${borderColor}` : 'hover:bg-slate-50 hover:border-slate-100'}`}
-                          >
-                              <div className="flex-1 flex items-center gap-3 min-w-0">
-                                  <div className={`p-2 rounded-lg ${selectedFile?.id === file.id ? 'bg-white shadow-sm' : 'bg-slate-100 group-hover:bg-white group-hover:shadow-sm transition-colors'}`}>
-                                      {renderIcon(file.mimeType)}
-                                  </div>
-                                  <div className="min-w-0">
-                                      <p className={`text-sm font-semibold truncate ${selectedFile?.id === file.id ? 'text-slate-900' : 'text-slate-700'}`}>
-                                          {file.name}
-                                      </p>
-                                      <p className="text-[11px] text-slate-400 sm:hidden mt-0.5">
-                                          {formatFileSize(file.size)} • {formatDate(file.createdTime || file.modifiedTime)}
-                                      </p>
-                                  </div>
-                              </div>
-                              
-                              <div className="hidden sm:flex items-center gap-8 text-xs text-slate-500">
-                                  <span className="w-24 text-right font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">{formatDate(file.createdTime || file.modifiedTime).split(' ')[0]}</span>
-                                  <div className="w-24 flex items-center justify-end gap-1.5">
-                                      <User className="w-3 h-3 opacity-50" />
-                                      <span className="truncate max-w-[80px]" title={file.lastModifyingUser?.emailAddress}>{file.lastModifyingUser?.displayName || 'Admin'}</span>
-                                  </div>
-                              </div>
+                      filteredFiles.map((file) => {
+                          const matchedTicket = Object.keys(ticketSummaries).find(t => file.name.includes(t));
+                          const summary = matchedTicket ? ticketSummaries[matchedTicket] : null;
 
-                              <div className="w-6 flex justify-end">
-                                   {selectedFile?.id === file.id && <ChevronRight className={`w-4 h-4 ${accentColor}`} />}
-                              </div>
-                          </div>
-                      ))
+                          return (
+                            <div 
+                                key={file.id}
+                                onClick={() => setSelectedFile(file)}
+                                onMouseEnter={(e) => handleRowMouseEnter(e, file)}
+                                onMouseLeave={handleRowMouseLeave}
+                                className={`group flex items-start px-3 py-3 rounded-xl cursor-pointer transition-all border border-transparent ${selectedFile?.id === file.id ? `${bgColor} ${borderColor}` : 'hover:bg-slate-50 hover:border-slate-100'}`}
+                            >
+                                <div className="flex-1 flex items-start gap-3 min-w-0">
+                                    <div className={`p-2 rounded-lg mt-0.5 ${selectedFile?.id === file.id ? 'bg-white shadow-sm' : 'bg-slate-100 group-hover:bg-white group-hover:shadow-sm transition-colors'}`}>
+                                        {renderIcon(file.mimeType)}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <p className={`text-sm font-semibold truncate ${selectedFile?.id === file.id ? 'text-slate-900' : 'text-slate-700'}`}>
+                                            {file.name}
+                                        </p>
+                                        
+                                        {/* INLINE SUMMARY UNDER FILENAME */}
+                                        {summary && (
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 flex items-center gap-1">
+                                                    {formatCurrency(summary.totalMoney)}
+                                                </span>
+                                                <span className="text-[10px] text-slate-400 font-medium">
+                                                    • {summary.totalQty} mặt hàng
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        <p className="text-[11px] text-slate-400 sm:hidden mt-1">
+                                            {formatFileSize(file.size)} • {formatDate(file.createdTime || file.modifiedTime)}
+                                        </p>
+                                    </div>
+                                </div>
+                                
+                                <div className="hidden sm:flex items-center gap-8 text-xs text-slate-500 mt-2">
+                                    <span className="w-24 text-right font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded">{formatDate(file.createdTime || file.modifiedTime).split(' ')[0]}</span>
+                                    <div className="w-24 flex items-center justify-end gap-1.5">
+                                        <User className="w-3 h-3 opacity-50" />
+                                        <span className="truncate max-w-[80px]" title={file.lastModifyingUser?.emailAddress}>{file.lastModifyingUser?.displayName || 'Admin'}</span>
+                                    </div>
+                                </div>
+
+                                <div className="w-6 flex justify-end mt-2">
+                                    {selectedFile?.id === file.id && <ChevronRight className={`w-4 h-4 ${accentColor}`} />}
+                                </div>
+                            </div>
+                        )
+                      })
                   )}
               </div>
           </div>
@@ -257,7 +387,7 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
                            </button>
                       </div>
                   </div>
-                  
+
                   <div className="flex-1 relative bg-slate-200 overflow-hidden">
                       <iframe 
                           src={getPreviewLink(selectedFile.webViewLink)}
