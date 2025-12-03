@@ -4,7 +4,7 @@ import {
   FileText, Image as ImageIcon, File, User, 
   Search, RefreshCw, Settings, AlertCircle, 
   Loader2, Eye, X, Download, Printer, Calendar, FolderOpen, ChevronRight,
-  ShoppingCart, Package, List, Gem, ArrowRight
+  ShoppingCart, Package, List, Gem, ArrowRight, Wrench, Building2
 } from 'lucide-react';
 import { DriveFile, DeviceRow } from '../types';
 import { fetchDriveFiles, formatFileSize, getFileIcon, getDownloadLink, getPrintSource } from '../services/driveService';
@@ -52,38 +52,72 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
   const borderColor = isVoucher ? 'border-emerald-100' : 'border-blue-100';
   const ringColor = isVoucher ? 'focus:ring-emerald-500/20' : 'focus:ring-blue-500/20';
 
-  // --- PRE-CALCULATE TICKET SUMMARIES ---
-  const ticketSummaries = useMemo(() => {
+  // --- PRE-CALCULATE SUMMARIES (Vouchers OR Tech Docs) ---
+  const dataSummaries = useMemo(() => {
     if (!transactionData) return {};
     const map: Record<string, any> = {};
     
-    // Group items by Ticket Number
-    transactionData.forEach(row => {
-        const t = row.ticketNumber;
-        if (!map[t]) map[t] = { items: [], totalMoney: 0, totalQty: 0 };
-        
-        map[t].items.push(row);
-        
-        // Calc totals
-        const qty = parseFloat(row.fullData[14]?.replace(/,/g, '') || '0') || 0;
-        const money = parseFloat(row.fullData[16]?.replace(/,/g, '') || '0') || 0;
-        
-        map[t].totalQty += qty;
-        map[t].totalMoney += money;
-    });
-
-    // Sort items for each ticket by Money DESC
-    Object.keys(map).forEach(t => {
-        map[t].items.sort((a: any, b: any) => {
-             const valA = parseFloat(a.fullData[16]?.replace(/,/g, '') || '0');
-             const valB = parseFloat(b.fullData[16]?.replace(/,/g, '') || '0');
-             return valB - valA;
+    if (isVoucher) {
+        // --- LOGIC CHO CHỨNG TỪ (GROUP BY TICKET) ---
+        transactionData.forEach(row => {
+            const t = row.ticketNumber;
+            if (!map[t]) map[t] = { type: 'voucher', key: t, items: [], totalMoney: 0, totalQty: 0 };
+            
+            map[t].items.push(row);
+            
+            // Calc totals
+            const qty = parseFloat(row.fullData[14]?.replace(/,/g, '') || '0') || 0;
+            const money = parseFloat(row.fullData[16]?.replace(/,/g, '') || '0') || 0;
+            
+            map[t].totalQty += qty;
+            map[t].totalMoney += money;
         });
-        map[t].topItems = map[t].items.slice(0, 5); // Take top 5 for hover preview
-    });
+
+        // Sort items for each ticket by Money DESC
+        Object.keys(map).forEach(t => {
+            map[t].items.sort((a: any, b: any) => {
+                 const valA = parseFloat(a.fullData[16]?.replace(/,/g, '') || '0');
+                 const valB = parseFloat(b.fullData[16]?.replace(/,/g, '') || '0');
+                 return valB - valA;
+            });
+            map[t].topItems = map[t].items.slice(0, 5);
+        });
+
+    } else {
+        // --- LOGIC CHO TÀI LIỆU KỸ THUẬT (GROUP BY MODEL/NAME) ---
+        // Mục tiêu: Tìm xem tài liệu này (filename) nói về Model nào trong kho
+        transactionData.forEach(row => {
+            // Ưu tiên Model, nếu không có thì lấy tên thiết bị
+            const keyRaw = (row.modelSerial && row.modelSerial.length > 2 && row.modelSerial !== 'N/A') 
+                           ? row.modelSerial 
+                           : row.deviceName;
+            
+            if (!keyRaw) return;
+            const key = keyRaw.trim();
+            if (key.length < 3) return; // Bỏ qua khóa quá ngắn để tránh match nhầm (VD: "A1", "01")
+
+            if (!map[key]) {
+                map[key] = { 
+                    type: 'device', 
+                    key: key, 
+                    rows: [], 
+                    departments: new Set() 
+                };
+            }
+            
+            map[key].rows.push(row);
+            if (row.department) map[key].departments.add(row.department);
+        });
+
+        // Convert Set to Array for rendering
+        Object.keys(map).forEach(k => {
+            map[k].deptList = Array.from(map[k].departments);
+            map[k].totalCount = map[k].rows.length;
+        });
+    }
     
     return map;
-  }, [transactionData]);
+  }, [transactionData, isVoucher]);
 
   const loadFiles = async () => {
     if (!folderId) return;
@@ -116,15 +150,16 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
 
   // Handle Hover logic
   const handleRowMouseEnter = (e: React.MouseEvent, file: DriveFile) => {
-    // Find matched ticket
-    const matchedTicket = Object.keys(ticketSummaries).find(t => file.name.includes(t));
-    if (matchedTicket) {
+    // Find matched key in summary map
+    const matchedKey = Object.keys(dataSummaries).find(k => file.name.toLowerCase().includes(k.toLowerCase()));
+    
+    if (matchedKey) {
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         setHoverInfo({
             id: file.id,
-            data: { ...ticketSummaries[matchedTicket], ticket: matchedTicket },
+            data: dataSummaries[matchedKey],
             top: rect.top,
-            left: rect.right - 20 // Show slightly to the right/overlap
+            left: rect.left + (rect.width / 2) // Lấy vị trí GIỮA dòng
         });
     }
   };
@@ -189,45 +224,89 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
           <div 
             className="fixed z-50 bg-white rounded-xl shadow-2xl border border-slate-200 p-4 w-80 animate-in fade-in zoom-in-95 duration-200 pointer-events-none"
             style={{ 
-                top: Math.min(window.innerHeight - 300, Math.max(10, hoverInfo.top)), // Keep within view
-                left: Math.min(window.innerWidth - 340, hoverInfo.left + 10) 
+                top: Math.min(window.innerHeight - 300, Math.max(10, hoverInfo.top + 20)), 
+                left: hoverInfo.left,
+                transform: 'translateX(-50%)' // Căn giữa tooltip
             }}
           >
+             {/* HEADER */}
              <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-100">
                  <div className="flex items-center gap-2 font-bold text-slate-800">
-                     <List className="w-4 h-4 text-emerald-600" />
-                     Phiếu {hoverInfo.data.ticket}
+                     {hoverInfo.data.type === 'voucher' ? (
+                        <>
+                            <List className="w-4 h-4 text-emerald-600" />
+                            Phiếu {hoverInfo.data.key}
+                        </>
+                     ) : (
+                        <>
+                            <Wrench className="w-4 h-4 text-blue-600" />
+                            Model: {hoverInfo.data.key}
+                        </>
+                     )}
                  </div>
-                 <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">
-                     {formatCurrency(hoverInfo.data.totalMoney)}
-                 </span>
+                 {hoverInfo.data.type === 'voucher' && (
+                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold">
+                        {formatCurrency(hoverInfo.data.totalMoney)}
+                    </span>
+                 )}
              </div>
              
+             {/* CONTENT */}
              <div className="space-y-2">
-                 <p className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
-                     <Gem className="w-3 h-3"/> Top hàng hóa giá trị
-                 </p>
-                 {hoverInfo.data.topItems.map((item: any, idx: number) => (
-                     <div key={idx} className="flex justify-between items-center text-xs">
-                         <div className="truncate pr-2 text-slate-700 font-medium flex-1">
-                             {item.deviceName}
-                         </div>
-                         <div className="text-slate-500 font-mono text-[10px] whitespace-nowrap">
-                            x{parseFloat(item.fullData[14] || '0')}
-                         </div>
-                     </div>
-                 ))}
-                 
-                 {hoverInfo.data.items.length > 5 && (
-                     <div className="pt-2 border-t border-slate-50 mt-2 text-[10px] text-center text-slate-400 italic">
-                         ...và {hoverInfo.data.items.length - 5} mặt hàng khác
-                     </div>
+                 {hoverInfo.data.type === 'voucher' ? (
+                     // VOUCHER CONTENT
+                     <>
+                        <p className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
+                            <Gem className="w-3 h-3"/> Top hàng hóa giá trị
+                        </p>
+                        {hoverInfo.data.topItems.map((item: any, idx: number) => (
+                            <div key={idx} className="flex justify-between items-center text-xs">
+                                <div className="truncate pr-2 text-slate-700 font-medium flex-1">
+                                    {item.deviceName}
+                                </div>
+                                <div className="text-slate-500 font-mono text-[10px] whitespace-nowrap">
+                                    x{parseFloat(item.fullData[14] || '0')}
+                                </div>
+                            </div>
+                        ))}
+                        {hoverInfo.data.items.length > 5 && (
+                            <div className="pt-2 border-t border-slate-50 mt-2 text-[10px] text-center text-slate-400 italic">
+                                ...và {hoverInfo.data.items.length - 5} mặt hàng khác
+                            </div>
+                        )}
+                        <div className="mt-2 pt-2 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
+                            <span>Tổng số lượng:</span>
+                            <span className="font-bold text-slate-700">{hoverInfo.data.totalQty}</span>
+                        </div>
+                     </>
+                 ) : (
+                     // DEVICE/MODEL CONTENT
+                     <>
+                        <div className="flex justify-between items-center bg-blue-50 p-2 rounded-lg mb-2">
+                             <span className="text-xs text-blue-800">Liên quan đến:</span>
+                             <span className="text-xs font-bold text-blue-700">{hoverInfo.data.totalCount} giao dịch</span>
+                        </div>
+                        
+                        <p className="text-[10px] uppercase font-bold text-slate-400 flex items-center gap-1">
+                            <Building2 className="w-3 h-3"/> Đơn vị sử dụng
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                            {hoverInfo.data.deptList.slice(0, 8).map((dept: string, idx: number) => (
+                                <span key={idx} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200">
+                                    {dept}
+                                </span>
+                            ))}
+                            {hoverInfo.data.deptList.length > 8 && (
+                                <span className="text-[10px] bg-slate-100 text-slate-400 px-2 py-0.5 rounded italic">
+                                    +{hoverInfo.data.deptList.length - 8} khác
+                                </span>
+                            )}
+                             {hoverInfo.data.deptList.length === 0 && (
+                                <span className="text-xs text-slate-400 italic">Chưa ghi nhận bộ phận sử dụng</span>
+                            )}
+                        </div>
+                     </>
                  )}
-                 
-                 <div className="mt-2 pt-2 border-t border-slate-100 flex justify-between items-center text-xs text-slate-500">
-                     <span>Tổng số lượng:</span>
-                     <span className="font-bold text-slate-700">{hoverInfo.data.totalQty}</span>
-                 </div>
              </div>
           </div>
       )}
@@ -307,8 +386,9 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
                       </div>
                   ) : (
                       filteredFiles.map((file) => {
-                          const matchedTicket = Object.keys(ticketSummaries).find(t => file.name.includes(t));
-                          const summary = matchedTicket ? ticketSummaries[matchedTicket] : null;
+                          // Find matched key in summary map
+                          const matchedKey = Object.keys(dataSummaries).find(k => file.name.toLowerCase().includes(k.toLowerCase()));
+                          const summary = matchedKey ? dataSummaries[matchedKey] : null;
 
                           return (
                             <div 
@@ -328,13 +408,23 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
                                         </p>
                                         
                                         {/* INLINE SUMMARY UNDER FILENAME */}
-                                        {summary && (
+                                        {summary && summary.type === 'voucher' && (
                                             <div className="flex items-center gap-2 mt-1">
                                                 <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100 flex items-center gap-1">
                                                     {formatCurrency(summary.totalMoney)}
                                                 </span>
                                                 <span className="text-[10px] text-slate-400 font-medium">
                                                     • {summary.totalQty} mặt hàng
+                                                </span>
+                                            </div>
+                                        )}
+                                        {summary && summary.type === 'device' && (
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 flex items-center gap-1">
+                                                    Model: {summary.key}
+                                                </span>
+                                                <span className="text-[10px] text-slate-400 font-medium">
+                                                    • {summary.totalCount} giao dịch
                                                 </span>
                                             </div>
                                         )}
