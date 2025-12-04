@@ -68,33 +68,144 @@ export const DeviceDetailModal: React.FC<DeviceDetailModalProps> = ({ device, on
   ];
 
   const handlePrint = () => {
+      // 1. Lấy nội dung SVG QR code hiện tại để đưa vào trang in
+      const qrContainer = document.getElementById('modal-qr-container');
+      const svgElement = qrContainer?.querySelector('svg');
+      let qrSvgString = '';
+      
+      if (svgElement) {
+          // Serialize SVG sang chuỗi string để render lại bên trang in
+          qrSvgString = new XMLSerializer().serializeToString(svgElement);
+      }
+
+      // 2. Tạo nội dung HTML cho trang in
       const printWindow = window.open('', '_blank');
       if (printWindow) {
         printWindow.document.write(`
+          <!DOCTYPE html>
           <html>
             <head>
-              <title>In Tem: ${device.deviceName}</title>
+              <title>Phiếu thiết bị: ${device.deviceName}</title>
               <style>
-                body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-                .card { border: 1px solid black; padding: 20px; text-align: center; width: 300px; }
-                .title { font-size: 18px; font-weight: bold; margin-bottom: 5px; }
-                .dept { font-size: 14px; margin-bottom: 10px; }
-                .footer { font-size: 14px; margin-top: 10px; font-weight: bold; }
+                body { 
+                    font-family: 'Times New Roman', serif; 
+                    padding: 40px; 
+                    margin: 0;
+                    color: #000;
+                    background: #fff;
+                }
+                .container {
+                    max-width: 800px;
+                    margin: 0 auto;
+                    border: 1px solid #000;
+                    padding: 20px;
+                }
+                .header {
+                    text-align: center;
+                    border-bottom: 2px solid #000;
+                    padding-bottom: 15px;
+                    margin-bottom: 20px;
+                }
+                .title {
+                    font-size: 24px;
+                    font-weight: bold;
+                    text-transform: uppercase;
+                    margin: 0 0 10px 0;
+                }
+                .meta {
+                    font-size: 14px;
+                    font-style: italic;
+                }
+                .content-wrapper {
+                    display: flex;
+                    gap: 20px;
+                    align-items: flex-start;
+                }
+                .qr-section {
+                    flex: 0 0 160px;
+                    text-align: center;
+                    border: 1px solid #ccc;
+                    padding: 10px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                }
+                .qr-section svg {
+                    width: 140px;
+                    height: 140px;
+                }
+                .table-section {
+                    flex: 1;
+                }
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 13px;
+                }
+                th, td {
+                    border: 1px solid #ccc;
+                    padding: 8px;
+                    text-align: left;
+                    vertical-align: top;
+                }
+                th {
+                    background-color: #f0f0f0;
+                    width: 35%;
+                    font-weight: bold;
+                }
+                .footer {
+                    margin-top: 30px;
+                    text-align: right;
+                    font-size: 12px;
+                    font-style: italic;
+                }
+                @media print {
+                    body { -webkit-print-color-adjust: exact; }
+                    .container { border: none; padding: 0; }
+                }
               </style>
             </head>
             <body>
-              <div class="card">
-                 <div class="title">${device.ticketNumber}</div>
-                 <div class="dept">${device.department}</div>
-                 <div id="qr-target"></div>
-                 <div class="footer">${device.deviceName}</div>
-                 <div>${device.modelSerial}</div>
+              <div class="container">
+                  <div class="header">
+                      <div class="title">PHIẾU THÔNG TIN THIẾT BỊ</div>
+                      <div class="meta">Số phiếu: ${device.ticketNumber} | Ngày tạo: ${formatDate(device.fullData[5])}</div>
+                  </div>
+
+                  <div class="content-wrapper">
+                      <div class="qr-section">
+                          ${qrSvgString}
+                          <div style="font-weight:bold; margin-top:5px; font-size:12px;">${device.ticketNumber}</div>
+                      </div>
+                      
+                      <div class="table-section">
+                          <table>
+                              <tbody>
+                                  ${fields.map(f => `
+                                      <tr>
+                                          <th>${f.label.replace(/\(.\)/g, '')}</th>
+                                          <td>${f.value || '-'}</td>
+                                      </tr>
+                                  `).join('')}
+                              </tbody>
+                          </table>
+                      </div>
+                  </div>
+
+                  <div class="footer">
+                      <p>In ngày: ${new Date().toLocaleString('vi-VN')}</p>
+                      <p>Hệ thống quản lý kho thiết bị</p>
+                  </div>
               </div>
+              <script>
+                  // Tự động in khi tải xong
+                  window.onload = function() { window.print(); }
+              </script>
             </body>
           </html>
         `);
         printWindow.document.close();
-        printWindow.print();
       }
   };
 
@@ -153,7 +264,10 @@ export const DeviceDetailModal: React.FC<DeviceDetailModalProps> = ({ device, on
 
                 {/* Right: QR Preview (Sticky on Desktop) */}
                 <div className="lg:w-72 shrink-0 flex flex-col gap-4">
-                    <div className="bg-white border-2 border-slate-800 p-4 rounded-xl shadow-sm flex flex-col items-center justify-center text-center aspect-square sticky top-0">
+                    <div 
+                        id="modal-qr-container" 
+                        className="bg-white border-2 border-slate-800 p-4 rounded-xl shadow-sm flex flex-col items-center justify-center text-center aspect-square sticky top-0"
+                    >
                         <QRCodeSVG 
                             value={device.qrContent} 
                             size={200} 
@@ -178,7 +292,7 @@ export const DeviceDetailModal: React.FC<DeviceDetailModalProps> = ({ device, on
             </button>
             <button onClick={handlePrint} className="px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-lg shadow-blue-500/20 flex items-center gap-2">
                 <Printer className="w-4 h-4" />
-                In Tem Này
+                In Chi Tiết (A4)
             </button>
         </div>
       </div>
