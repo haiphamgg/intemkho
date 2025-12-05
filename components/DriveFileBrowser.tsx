@@ -1,13 +1,15 @@
 
+// ... existing imports ...
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   FileText, Image as ImageIcon, File, User, 
   Search, RefreshCw, Settings, AlertCircle, 
   Loader2, Eye, X, Download, Printer, Calendar, FolderOpen, ChevronRight,
-  ShoppingCart, Package, List, Gem, ArrowRight, Wrench, Building2
+  ShoppingCart, Package, List, Gem, ArrowRight, Wrench, Building2, CloudUpload, Trash2
 } from 'lucide-react';
 import { DriveFile, DeviceRow } from '../types';
 import { fetchDriveFiles, formatFileSize, getFileIcon, getDownloadLink, getPrintSource } from '../services/driveService';
+import { saveToGoogleSheet } from '../services/sheetService';
 
 const DEFAULT_API_URL = "https://script.google.com/macros/s/AKfycbyqEtmuL0lOwh_Iibgs7oxx0lSC1HG1ubNcPc6KINu8a-aC3adsK9qTRj9LCjX4z7iq/exec";
 
@@ -17,6 +19,7 @@ interface DriveFileBrowserProps {
   description: string;
   initialSearch?: string;
   transactionData?: DeviceRow[]; // Optional prop to link with sheet data
+  scriptUrl?: string; // Add this prop
 }
 
 // Helper: Format Currency
@@ -24,19 +27,29 @@ const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 };
 
-export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, title, description, initialSearch, transactionData }) => {
+export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, title, description, initialSearch, transactionData, scriptUrl }) => {
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState(initialSearch || '');
   const [selectedFile, setSelectedFile] = useState<DriveFile | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
   const printFrameRef = useRef<HTMLIFrameElement>(null);
-  const [scriptUrl, setScriptUrl] = useState(DEFAULT_API_URL);
+  const [currentScriptUrl, setCurrentScriptUrl] = useState(scriptUrl || DEFAULT_API_URL);
   const [showConfig, setShowConfig] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Upload & Delete States
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false); // New state for delete
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // State cho Hover Tooltip
   const [hoverInfo, setHoverInfo] = useState<{ id: string, data: any, top: number, left: number } | null>(null);
+
+  // Update script url if prop changes
+  useEffect(() => {
+      if (scriptUrl) setCurrentScriptUrl(scriptUrl);
+  }, [scriptUrl]);
 
   // Sync initialSearch if it changes from parent
   useEffect(() => {
@@ -51,6 +64,7 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
   const bgColor = isVoucher ? 'bg-emerald-50' : 'bg-blue-50';
   const borderColor = isVoucher ? 'border-emerald-100' : 'border-blue-100';
   const ringColor = isVoucher ? 'focus:ring-emerald-500/20' : 'focus:ring-blue-500/20';
+  const btnColor = isVoucher ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700';
 
   // --- PRE-CALCULATE SUMMARIES (Vouchers OR Tech Docs) ---
   const dataSummaries = useMemo(() => {
@@ -125,7 +139,7 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
     setError(null);
     setSelectedFile(null);
     try {
-      const data = await fetchDriveFiles(folderId, scriptUrl);
+      const data = await fetchDriveFiles(folderId, currentScriptUrl);
       setFiles(data);
     } catch (err: any) {
       console.error(err);
@@ -137,7 +151,7 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
 
   useEffect(() => {
     loadFiles();
-  }, [folderId, scriptUrl]);
+  }, [folderId, currentScriptUrl]);
 
   const filteredFiles = useMemo(() => {
     if (!searchTerm) return files;
@@ -147,6 +161,73 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
       (f.lastModifyingUser?.displayName || '').toLowerCase().includes(lowerTerm)
     );
   }, [files, searchTerm]);
+
+  // Handle Upload
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      if (!folderId) {
+          alert("Lỗi: Không tìm thấy Folder ID.");
+          return;
+      }
+
+      setIsUploading(true);
+      try {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = async () => {
+              const base64Data = reader.result as string;
+              // Call Service
+              await saveToGoogleSheet({
+                  action: 'upload_file',
+                  folderId: folderId,
+                  base64Data: base64Data,
+                  fileName: file.name
+              }, currentScriptUrl);
+              
+              alert("Upload thành công!");
+              loadFiles(); // Reload list
+          };
+      } catch (err: any) {
+          console.error("Upload error", err);
+          alert("Lỗi upload: " + err.message);
+      } finally {
+          setIsUploading(false);
+          if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+  };
+
+  // Handle File Deletion
+  const handleDeleteFile = async (file: DriveFile) => {
+      if (!confirm(`Bạn có chắc chắn muốn xóa file "${file.name}" không?\nFile sẽ được chuyển vào thùng rác Google Drive.`)) {
+          return;
+      }
+
+      setIsDeleting(true);
+      try {
+          await saveToGoogleSheet({
+              action: 'delete_file',
+              fileId: file.id
+          }, currentScriptUrl);
+          
+          alert("Đã xóa file thành công!");
+          // Remove from local list immediately
+          setFiles(prev => prev.filter(f => f.id !== file.id));
+          if (selectedFile?.id === file.id) setSelectedFile(null);
+          
+      } catch (err: any) {
+          console.error("Delete error", err);
+          // Check for "Action không hợp lệ"
+          if (err.message.includes('Action không hợp lệ')) {
+              alert("Lỗi: Code Backend chưa hỗ trợ xóa file. Vui lòng cập nhật Script trong phần Danh Mục.");
+          } else {
+              alert("Lỗi xóa file: " + err.message);
+          }
+      } finally {
+          setIsDeleting(false);
+      }
+  };
 
   // Handle Hover logic
   const handleRowMouseEnter = (e: React.MouseEvent, file: DriveFile) => {
@@ -335,6 +416,18 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                  {searchTerm && <button onClick={() => setSearchTerm('')}><X className="w-4 h-4 absolute right-3 top-3 text-slate-400 hover:text-slate-600" /></button>}
              </div>
+             
+             {/* Upload Button */}
+             <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+             <button 
+                onClick={() => fileInputRef.current?.click()} 
+                disabled={isUploading}
+                className={`flex items-center gap-2 px-4 py-2.5 text-white font-bold rounded-xl shadow-lg transition-all active:scale-95 disabled:opacity-50 ${btnColor}`}
+             >
+                {isUploading ? <Loader2 className="w-5 h-5 animate-spin"/> : <CloudUpload className="w-5 h-5" />}
+                <span className="hidden sm:inline">Upload</span>
+             </button>
+
              <button onClick={loadFiles} className="p-2.5 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 text-slate-500 hover:text-slate-800 transition-colors shadow-sm">
                  <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
              </button>
@@ -348,7 +441,7 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
         <div className="mb-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm animate-in slide-in-from-top-2">
             <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">API Endpoint</label>
             <div className="flex gap-2">
-                <input value={scriptUrl} onChange={(e) => setScriptUrl(e.target.value)} className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono" />
+                <input value={currentScriptUrl} onChange={(e) => setCurrentScriptUrl(e.target.value)} className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono" />
                 <button onClick={loadFiles} className="px-4 py-2 bg-slate-800 text-white rounded-lg text-xs font-bold hover:bg-slate-900">Lưu</button>
             </div>
         </div>
@@ -472,7 +565,17 @@ export const DriveFileBrowser: React.FC<DriveFileBrowserProps> = ({ folderId, ti
                            <a href={getDownloadLink(selectedFile)} target="_blank" rel="noreferrer" className="p-2 hover:bg-blue-50 hover:text-blue-600 rounded-lg text-slate-600 transition-colors" title="Tải về">
                               <Download className="w-5 h-5" />
                            </a>
-                           <button onClick={() => setSelectedFile(null)} className="hidden md:block p-2 hover:bg-red-50 hover:text-red-600 rounded-lg text-slate-400 transition-colors">
+                           {/* DELETE BUTTON */}
+                           <button 
+                                onClick={() => handleDeleteFile(selectedFile)} 
+                                disabled={isDeleting}
+                                className="p-2 hover:bg-red-50 hover:text-red-600 rounded-lg text-slate-400 transition-colors" 
+                                title="Xóa file (Chuyển vào thùng rác)"
+                           >
+                              {isDeleting ? <Loader2 className="w-5 h-5 animate-spin"/> : <Trash2 className="w-5 h-5" />}
+                           </button>
+
+                           <button onClick={() => setSelectedFile(null)} className="hidden md:block p-2 hover:bg-red-50 hover:text-red-600 rounded-lg text-slate-400 transition-colors ml-2 border-l border-slate-200">
                               <X className="w-5 h-5" />
                            </button>
                       </div>

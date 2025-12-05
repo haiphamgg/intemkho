@@ -1,4 +1,5 @@
 
+// ... existing imports ...
 import React, { useState, useEffect } from 'react';
 import { fetchGoogleSheetData, saveToGoogleSheet } from '../services/sheetService';
 import { Database, Plus, Save, RefreshCw, Search, Loader2, List, Tag, Building2, MapPin, Globe, Box, Edit2, X, Trash2, AlertCircle, Copy, Check, Lock, AlertTriangle, Wand2 } from 'lucide-react';
@@ -125,7 +126,6 @@ const removeVietnameseTones = (str: string) => {
 const ScriptHelpModal = ({ onClose }: { onClose: () => void }) => {
     const [copied, setCopied] = useState(false);
     
-    // UPDATED SCRIPT: getLastRowWithData implemented correctly
     const codeSnippet = `
 function doPost(e) {
   var lock = LockService.getScriptLock();
@@ -136,14 +136,14 @@ function doPost(e) {
     var action = json.action;
     var ss = SpreadsheetApp.getActiveSpreadsheet();
 
-    // --- 1. TẠO PHIẾU NHẬP/XUẤT (Sheet DULIEU) ---
+    // --- 1. TẠO PHIẾU NHẬP/XUẤT ---
     if (action === 'create_ticket') {
       var sheet = ss.getSheetByName('DULIEU');
       if (!sheet) sheet = ss.insertSheet('DULIEU');
       
-      var rows = json.rows; // Array[][]
+      var rows = json.rows; // Array[][] (18 columns)
       if (rows && rows.length > 0) {
-        var lastRow = getLastRowWithData(sheet, 1); // Check cột A (STT) để tìm dòng cuối
+        var lastRow = getLastRowWithData(sheet, 1);
         var startSTT = 0;
         
         if (lastRow > 2) {
@@ -152,56 +152,59 @@ function doPost(e) {
         }
 
         for (var i = 0; i < rows.length; i++) {
-          rows[i][0] = startSTT + i + 1; // Cột A: STT
-          
-          var qrInfo = "Tên thiết bị: " + rows[i][7] + "\\n" +
-                       "Nguồn/NCC: " + rows[i][2] + "\\n" +
-                       "Bộ phận: " + rows[i][3] + "\\n" +
-                       "Ngày: " + rows[i][5] + "\\n" + 
-                       "Model: " + rows[i][12] + "\\n" +
-                       "Bảo hành: " + rows[i][13];
-          
-          while(rows[i].length < 19) { rows[i].push(""); }
-          rows[i][18] = qrInfo;
+          rows[i][0] = startSTT + i + 1; 
+          // Cột S (QR) để trống
         }
         
-        // Ghi nối tiếp ngay sau dòng dữ liệu cuối cùng
         sheet.getRange(lastRow + 1, 1, rows.length, rows[0].length).setValues(rows);
         return responseJSON({status: 'success', message: 'Đã tạo ' + rows.length + ' dòng phiếu.'});
       }
     }
 
-    // --- 2. QUẢN LÝ THIẾT BỊ (Sheet DANHMUC) ---
+    // --- 2. UPLOAD FILE LÊN DRIVE ---
+    else if (action === 'upload_file') {
+        var folderId = json.folderId;
+        var base64Data = json.base64Data;
+        var fileName = json.fileName;
+        
+        var folder = DriveApp.getFolderById(folderId);
+        // Base64 thường có dạng "data:application/pdf;base64,....."
+        var contentType = base64Data.substring(5, base64Data.indexOf(';'));
+        var bytes = Utilities.base64Decode(base64Data.substring(base64Data.indexOf(',') + 1));
+        var blob = Utilities.newBlob(bytes, contentType, fileName);
+        
+        var file = folder.createFile(blob);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        
+        return responseJSON({
+            status: 'success', 
+            fileId: file.getId(), 
+            url: file.getUrl(),
+            message: 'Đã upload file thành công'
+        });
+    }
+
+    // --- 3. QUẢN LÝ THIẾT BỊ ---
     else if (action === 'add_master_device') {
        var sheet = ss.getSheetByName('DANHMUC');
        if (!sheet) sheet = ss.insertSheet('DANHMUC');
-       
-       // Cột C (Index 3) là Mã thiết bị. Tìm dòng cuối dựa trên cột C.
        var lastRow = getLastRowWithData(sheet, 3); 
-       
-       // Ghi vào dòng tiếp theo (lastRow + 1)
-       // json.row bao gồm padding cho cột A,B nên ghi từ cột 1
        sheet.getRange(lastRow + 1, 1, 1, json.row.length).setValues([json.row]);
-       
        return responseJSON({status: 'success', message: 'Đã thêm thiết bị mới.'});
     }
     else if (action === 'update_master_device') {
        var sheet = ss.getSheetByName('DANHMUC');
-       // rowIndex là dòng vật lý (1-based)
        sheet.getRange(json.rowIndex, 1, 1, json.row.length).setValues([json.row]);
        return responseJSON({status: 'success', message: 'Cập nhật thiết bị thành công'});
     }
 
-    // --- 3. QUẢN LÝ DANH MỤC CHUNG (Sheet DMDC) ---
+    // --- 4. QUẢN LÝ DANH MỤC CHUNG ---
     else if (action === 'add_master_dmdc') {
        var sheet = ss.getSheetByName('DMDC');
        if (!sheet) sheet = ss.insertSheet('DMDC');
-       
-       var colIndex = json.colIndex; // 0=A, 1=B...
+       var colIndex = json.colIndex; 
        var value = json.value;
-       
        if (colIndex !== undefined && value) {
-          // Tìm dòng cuối của RIÊNG cột đó
           var lastRowInCol = getLastRowWithData(sheet, colIndex + 1);
           sheet.getRange(lastRowInCol + 1, colIndex + 1).setValue(value);
           return responseJSON({status: 'success', message: 'Đã thêm vào danh mục.'});
@@ -214,20 +217,49 @@ function doPost(e) {
        return responseJSON({status: 'success', message: 'Cập nhật danh mục thành công'});
     }
 
-    // --- 4. XÓA DỮ LIỆU ---
+    // --- 5. XÓA DỮ LIỆU ---
     else if (action === 'delete_master_item') {
        var sheetName = json.sheetName;
        var sheet = ss.getSheetByName(sheetName);
-       
        if (sheetName === 'DANHMUC') {
-         // Xóa cả dòng (vì thiết bị nằm trên 1 dòng)
          sheet.deleteRow(json.rowIndex);
        } else if (sheetName === 'DMDC') {
-         // Xóa ô và đẩy dữ liệu lên (vì các cột độc lập)
          var range = sheet.getRange(json.rowIndex, json.colIndex + 1);
          range.deleteCells(SpreadsheetApp.Dimension.ROWS);
        }
        return responseJSON({status: 'success', message: 'Đã xóa dữ liệu thành công.'});
+    }
+
+    // --- 6. LIỆT KÊ FILE DRIVE ---
+    else if (action === 'list_files') {
+        var folderId = json.folderId;
+        var folder = DriveApp.getFolderById(folderId);
+        var files = folder.getFiles();
+        var result = [];
+        
+        while (files.hasNext()) {
+          var file = files.next();
+          result.push({
+            id: file.getId(),
+            name: file.getName(),
+            mimeType: file.getMimeType(),
+            url: file.getUrl(),
+            downloadUrl: file.getDownloadUrl(),
+            size: file.getSize(),
+            dateCreated: file.getDateCreated(),
+            lastUpdated: file.getLastUpdated(),
+            owner: file.getOwner() ? { emailAddress: file.getOwner().getEmail(), displayName: file.getOwner().getName() } : null
+          });
+        }
+        return responseJSON({status: 'success', files: result});
+    }
+
+    // --- 7. XÓA FILE DRIVE ---
+    else if (action === 'delete_file') {
+        var fileId = json.fileId;
+        // Chuyển file vào thùng rác thay vì xóa vĩnh viễn để an toàn
+        DriveApp.getFileById(fileId).setTrashed(true);
+        return responseJSON({status: 'success', message: 'Đã chuyển file vào thùng rác'});
     }
 
     return responseJSON({status: 'error', message: 'Action không hợp lệ: ' + action});
@@ -239,28 +271,21 @@ function doPost(e) {
   }
 }
 
-// --- CÁC HÀM HỖ TRỢ ---
 function responseJSON(data) {
   return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
 }
 
-// Hàm tìm dòng cuối cùng có dữ liệu trong một cột cụ thể
-// colIndex: 1 = A, 2 = B, ...
 function getLastRowWithData(sheet, colIndex) {
-  var lastRow = sheet.getLastRow(); // Lấy dòng cuối có format/content bất kỳ
+  var lastRow = sheet.getLastRow(); 
   if (lastRow === 0) return 0;
-  
-  // Lấy toàn bộ dữ liệu cột đó để quét ngược
   var range = sheet.getRange(1, colIndex, lastRow);
-  var values = range.getValues(); // Mảng 2 chiều [[val], [val], ...]
-  
-  // Quét từ dưới lên để tìm ô có dữ liệu thực sự
+  var values = range.getValues(); 
   for (var i = values.length - 1; i >= 0; i--) {
     if (values[i][0] !== "" && values[i][0] != null) {
-      return i + 1; // Return row index (1-based)
+      return i + 1; 
     }
   }
-  return 0; // Nếu cột trống trơn
+  return 0; 
 }
 `;
 
@@ -281,13 +306,13 @@ function getLastRowWithData(sheet, colIndex) {
                 </div>
                 <div className="p-6 overflow-y-auto custom-scrollbar">
                     <p className="text-sm text-slate-700 mb-4 leading-relaxed bg-amber-50 p-3 rounded border border-amber-100">
-                        <b>Cập nhật mới (Bắt buộc):</b> Code này sửa lỗi chèn dòng (nối đuôi chính xác) và sửa lỗi xóa.
+                        <b>Cập nhật code Apps Script (Bắt buộc):</b> Để xem danh sách file trong "Kho Chứng Từ" và "Tài Liệu Kỹ Thuật", bạn cần cập nhật script này.
                         <br/>
-                        1. Copy code bên dưới.
+                        1. Sao chép toàn bộ code bên dưới.
                         <br/>
-                        2. Dán đè vào file <b>Code.gs</b> trong Apps Script.
+                        2. Dán đè vào file <b>Code.gs</b> trong dự án Apps Script của bạn.
                         <br/>
-                        3. Nhấn <b>Deploy</b> {'>'} <b>New Deployment</b>.
+                        3. Nhấn <b>Deploy (Triển khai)</b> {'>'} <b>New Deployment (Bài triển khai mới)</b> để áp dụng.
                     </p>
                     <div className="relative group">
                         <pre className="bg-slate-900 text-green-400 p-4 rounded-lg text-xs font-mono overflow-x-auto whitespace-pre-wrap border border-slate-700 shadow-inner h-96">
@@ -312,7 +337,7 @@ function getLastRowWithData(sheet, colIndex) {
     );
 };
 
-// --- UNIFIED MODAL COMPONENT ---
+// ... (Rest of MasterData component remains unchanged)
 interface MasterModalProps {
     isOpen: boolean;
     mode: 'create' | 'edit';

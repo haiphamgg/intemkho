@@ -1,4 +1,5 @@
 
+// ... existing imports ...
 import React, { useState, useMemo, useEffect } from 'react';
 import { DataInput } from './components/DataInput';
 import { TicketSelector } from './components/TicketSelector';
@@ -41,6 +42,7 @@ const USER_API_KEY = "AIzaSyAF5gvD_y7IElH3IK-4UTiSm9SMxeUg1ac";
 
 type ViewMode = 'dashboard' | 'print' | 'lookup' | 'vouchers' | 'drive' | 'warehouse-in' | 'warehouse-out' | 'report' | 'master';
 
+// ... (keep helper functions like formatDate) ...
 // Hàm tiện ích format ngày tháng
 const formatDate = (input: string): string => {
   if (!input) return '';
@@ -93,6 +95,7 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [newPin, setNewPin] = useState('');
 
+  // ... (keep useEffect for auth and handleLoadData) ...
   useEffect(() => {
     // Check both session and persistent storage
     const sessionAuth = sessionStorage.getItem('IS_ADMIN');
@@ -215,6 +218,7 @@ export default function App() {
     setViewMode('vouchers');
   };
 
+  // ... (keep parsedData, uniqueTickets, selectedItems, etc.) ...
   const parsedData: DeviceRow[] = useMemo(() => {
     if (!rawData || rawData.length === 0) return [];
 
@@ -282,7 +286,6 @@ export default function App() {
   }, [selectedTicket, selectedItems, viewMode]);
 
   // --- UI COMPONENTS ---
-
   const SidebarItem = ({ mode, icon: Icon, label }: any) => {
     const isActive = viewMode === mode;
     return (
@@ -318,8 +321,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
-      
-      {/* SIDEBAR (Desktop) */}
+      {/* ... (Keep Sidebar and Header logic mostly same, skipping to main content) ... */}
       <aside className="hidden md:flex flex-col w-64 bg-slate-900 border-r border-slate-800 shrink-0 z-20 transition-all no-print shadow-xl">
          {/* ... Sidebar Content ... */}
          <div className="p-6 flex items-center gap-3 border-b border-slate-800/50">
@@ -457,7 +459,7 @@ export default function App() {
 
          {/* CONTENT AREA */}
          <main className="flex-1 overflow-hidden relative">
-            {/* ADMIN MODALS */}
+            {/* ... Admin Modals ... */}
             {showLogin && <AdminLogin onLogin={handleLogin} onClose={() => setShowLogin(false)} />}
             
             {showSettings && (
@@ -471,6 +473,7 @@ export default function App() {
                         <button onClick={() => setShowSettings(false)}><X className="w-5 h-5 text-slate-400"/></button>
                     </div>
                     <div className="p-4 flex flex-col gap-4 max-h-[80vh] overflow-y-auto">
+                        {/* Settings Inputs */}
                         <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
                              <label className="text-sm font-bold text-blue-700 mb-1 flex items-center gap-2">
                                 <Link className="w-4 h-4" />
@@ -487,8 +490,7 @@ export default function App() {
                                 URL này được tự động lấy từ ô <b>A2</b> của sheet <b>DMDC</b>. Hãy cập nhật trong file Sheet nếu muốn thay đổi.
                             </p>
                         </div>
-                        {/* Other config inputs */}
-                         <div>
+                        <div>
                             <label className="text-sm font-medium text-slate-700 mb-1 block">Google Sheet ID (Dữ liệu)</label>
                             <input 
                                 value={sheetId}
@@ -496,7 +498,7 @@ export default function App() {
                                 className="w-full p-2 border border-slate-300 rounded font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                             />
                         </div>
-                         <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                        <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
                              <label className="text-sm font-bold text-slate-700 mb-1 flex items-center gap-2">
                                 <KeyRound className="w-4 h-4" />
                                 Đổi mã PIN Admin
@@ -538,13 +540,27 @@ export default function App() {
 
             {viewMode === 'warehouse-in' && isAdmin && (
                <div className="h-full animate-in fade-in duration-300">
-                  <WarehouseForm type="import" sheetId={sheetId} scriptUrl={scriptUrl} />
+                  <WarehouseForm 
+                    type="import" 
+                    sheetId={sheetId} 
+                    scriptUrl={scriptUrl}
+                    folderId={voucherFolderId} // Pass Folder ID
+                    onSuccess={() => handleLoadData(sheetId)}
+                    existingTickets={parsedData}
+                   />
                </div>
             )}
 
             {viewMode === 'warehouse-out' && isAdmin && (
                <div className="h-full animate-in fade-in duration-300">
-                  <WarehouseForm type="export" sheetId={sheetId} scriptUrl={scriptUrl} />
+                  <WarehouseForm 
+                    type="export" 
+                    sheetId={sheetId} 
+                    scriptUrl={scriptUrl}
+                    folderId={voucherFolderId} // Pass Folder ID
+                    onSuccess={() => handleLoadData(sheetId)}
+                    existingTickets={parsedData}
+                  />
                </div>
             )}
 
@@ -559,7 +575,8 @@ export default function App() {
                    <MasterData scriptUrl={scriptUrl} />
                 </div>
             )}
-
+            
+            {/* Print View... */}
             {viewMode === 'print' && (
               <div className="h-full flex flex-col md:flex-row animate-in fade-in duration-300 relative">
                 {/* Mobile Toggle for Ticket List */}
@@ -627,14 +644,20 @@ export default function App() {
                         title="Kho Chứng Từ" 
                         description="Biên bản, Phiếu xuất/nhập kho (PDF)" 
                         initialSearch={voucherSearchTerm}
-                        transactionData={parsedData} // Pass transaction data here
+                        transactionData={parsedData} 
+                        scriptUrl={scriptUrl}
                    />
                </div>
             )}
             
             {viewMode === 'drive' && (
                <div className="h-full animate-in fade-in duration-300">
-                   <DriveFileBrowser folderId={docFolderId} title="Tài Liệu Kỹ Thuật" description="Catalogue, Hướng dẫn sử dụng" />
+                   <DriveFileBrowser 
+                       folderId={docFolderId} 
+                       title="Tài Liệu Kỹ Thuật" 
+                       description="Catalogue, Hướng dẫn sử dụng" 
+                       scriptUrl={scriptUrl}
+                    />
                </div>
             )}
          </main>

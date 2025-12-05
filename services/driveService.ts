@@ -1,6 +1,5 @@
 
 import { DriveFile } from '../types';
-// import { SCRIPT_URL } from './sheetService'; // Removed hard dependency
 
 export const fetchDriveFiles = async (folderId: string, scriptUrl: string): Promise<DriveFile[]> => {
   if (!folderId) {
@@ -11,12 +10,21 @@ export const fetchDriveFiles = async (folderId: string, scriptUrl: string): Prom
     throw new Error("Chưa cấu hình Script URL");
   }
 
-  // CACHE BUSTING
-  const timestamp = new Date().getTime();
-  const url = `${scriptUrl}?folderId=${folderId}&_t=${timestamp}`;
-
   try {
-    const response = await fetch(url);
+    // Sử dụng POST để gửi action 'list_files'
+    const response = await fetch(scriptUrl, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'list_files',
+        folderId: folderId
+      }),
+      mode: 'cors',
+      credentials: 'omit',
+      redirect: 'follow',
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
+    });
     
     if (!response.ok) {
       throw new Error(`Lỗi kết nối (${response.status})`);
@@ -24,17 +32,14 @@ export const fetchDriveFiles = async (folderId: string, scriptUrl: string): Prom
 
     const data = await response.json();
     
-    if (data.error) {
-      throw new Error(data.error);
+    if (data.status === 'error' || data.error) {
+      throw new Error(data.message || data.error);
     }
 
     const rawFiles = data.files || [];
 
     // Normalize data to match DriveFile interface
-    // Google Apps Script DriveApp return slightly different keys than Drive API v3
     return rawFiles.map((f: any) => {
-      // Xử lý user (có thể là object, string, hoặc nằm trong owner)
-      // Apps Script đôi khi trả về 'lastModifyingUser' là object, đôi khi là string tên
       let userName = 'Admin';
       let userEmail = '';
       
@@ -47,13 +52,10 @@ export const fetchDriveFiles = async (folderId: string, scriptUrl: string): Prom
         userEmail = userObj.emailAddress || '';
       }
       
-      // Fallback nếu API trả về lastModifyingUserName (một số version script cũ)
       if (userName === 'Admin' && f.lastModifyingUserName) {
           userName = f.lastModifyingUserName;
       }
 
-      // Xử lý ngày tháng - Quan trọng: Không dùng fallback new Date()
-      // Apps Script thường trả về dateCreated hoặc createdTime dưới dạng ISO String
       const created = f.createdTime || f.dateCreated || f.createdDate || null;
       const modified = f.modifiedTime || f.lastUpdated || f.updated || null;
 
@@ -61,7 +63,7 @@ export const fetchDriveFiles = async (folderId: string, scriptUrl: string): Prom
         id: f.id,
         name: f.name,
         mimeType: f.mimeType,
-        webViewLink: f.webViewLink || f.url, // Script might return 'url'
+        webViewLink: f.webViewLink || f.url, 
         webContentLink: f.webContentLink || f.downloadUrl,
         thumbnailLink: f.thumbnailLink,
         size: f.size,
@@ -81,7 +83,6 @@ export const fetchDriveFiles = async (folderId: string, scriptUrl: string): Prom
 };
 
 export const getDownloadLink = (file: DriveFile): string => {
-  // Nếu là file Google Docs/Sheets, link download mặc định sẽ là export PDF hoặc Excel
   if (file.mimeType.includes('application/vnd.google-apps.document')) {
     return `https://docs.google.com/document/d/${file.id}/export?format=pdf`;
   }
@@ -92,37 +93,28 @@ export const getDownloadLink = (file: DriveFile): string => {
     return `https://docs.google.com/presentation/d/${file.id}/export?format=pdf`;
   }
 
-  // Nếu có link tải trực tiếp từ API
   if (file.webContentLink) return file.webContentLink;
   
-  // Fallback chuẩn
   return `https://drive.google.com/uc?export=download&id=${file.id}`;
 };
 
 export const getPrintSource = (file: DriveFile): string => {
-  // 1. Đối với Ảnh: dùng link export=view để hiển thị trực tiếp trong iframe
   if (file.mimeType.includes('image')) {
       return `https://drive.google.com/uc?export=view&id=${file.id}`;
   }
 
-  // 2. Đối với Google Docs/Sheets: Sử dụng chế độ PREVIEW để tránh tự động tải về (download)
-  // Link export=pdf thường ép buộc tải xuống. Link /preview cho phép xem và in từ trình duyệt.
   if (file.mimeType.includes('application/vnd.google-apps')) {
      if (file.webViewLink) {
-        // Chuyển đổi link /edit hoặc /view thành /preview
         return file.webViewLink.replace(/\/edit.*|\/view.*/, '/preview');
      }
-     // Fallback construct URL
      if (file.mimeType.includes('spreadsheet')) return `https://docs.google.com/spreadsheets/d/${file.id}/preview`;
      if (file.mimeType.includes('document')) return `https://docs.google.com/document/d/${file.id}/preview`;
   }
   
-  // 3. Đối với PDF gốc trên Drive: Dùng /preview để mở trình xem PDF của Google
   if (file.mimeType.includes('pdf')) {
       return `https://drive.google.com/file/d/${file.id}/preview`;
   }
 
-  // Fallback: Dùng webViewLink gốc (thường là mode xem)
   return file.webViewLink || `https://drive.google.com/file/d/${file.id}/preview`;
 };
 

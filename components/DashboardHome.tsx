@@ -44,33 +44,43 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ data, lastUpdated,
     const uniqueDepts = new Set(data.filter(d => d.department).map(d => d.department)).size;
     const uniqueProviders = new Set(data.filter(d => d.provider).map(d => d.provider)).size;
 
-    // --- LOGIC HOẠT ĐỘNG GẦN NHẤT (MỚI: HIỂN THỊ TỐI ĐA 3 THIẾT BỊ) ---
-    const ticketMap = new Map<string, { date: string, items: string[] }>();
+    // --- LOGIC HOẠT ĐỘNG GẦN NHẤT (CHIA NHẬP/XUẤT) ---
+    const importMap = new Map<string, { date: string, items: string[] }>();
+    const exportMap = new Map<string, { date: string, items: string[] }>();
     
     // Duyệt ngược để lấy mới nhất trước
     [...data].reverse().forEach(d => {
-        if (!ticketMap.has(d.ticketNumber)) {
-            ticketMap.set(d.ticketNumber, { date: '', items: [] });
+        const ticket = d.ticketNumber;
+        const isExport = ticket.toUpperCase().startsWith('PX');
+        const targetMap = isExport ? exportMap : importMap;
+
+        if (!targetMap.has(ticket)) {
+            targetMap.set(ticket, { date: '', items: [] });
         }
-        const t = ticketMap.get(d.ticketNumber)!;
+        const t = targetMap.get(ticket)!;
         t.items.push(d.deviceName);
         if (!t.date && d.fullData[5]) t.date = d.fullData[5]; 
     });
 
-    const recentActivities = Array.from(ticketMap.entries())
-        .slice(0, 6) // Lấy 6 phiếu mới nhất
-        .map(([ticket, info]) => {
-            // Lấy tối đa 3 thiết bị đầu tiên để hiển thị
-            const displayItems = info.items.slice(0, 3);
-            const remaining = info.items.length - 3;
-            
-            return {
-                ticket,
-                displayItems: displayItems.join(', '),
-                remaining: remaining > 0 ? remaining : 0,
-                totalItems: info.items.length
-            };
-        });
+    const processActivity = (map: Map<string, { date: string, items: string[] }>) => {
+        return Array.from(map.entries())
+            .slice(0, 5) // Lấy 5 phiếu mới nhất
+            .map(([ticket, info]) => {
+                const displayItems = info.items.slice(0, 3);
+                const remaining = info.items.length - 3;
+                return {
+                    ticket,
+                    displayItems: displayItems.join(', '),
+                    remaining: remaining > 0 ? remaining : 0,
+                    totalItems: info.items.length
+                };
+            });
+    }
+
+    const recentImports = processActivity(importMap);
+    const recentExports = processActivity(exportMap);
+    
+    const recentActivityCombined = [...recentImports, ...recentExports].slice(0, 1); // Only for AI Context
 
     // Thống kê theo bộ phận (Top 5)
     const deptCounts: Record<string, number> = {};
@@ -126,7 +136,9 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ data, lastUpdated,
         uniqueTickets, 
         uniqueDepts, 
         uniqueProviders, 
-        recentActivities, 
+        recentImports,
+        recentExports,
+        recentActivityCombined,
         topDepts,
         topItems,
         maxMoney,
@@ -145,7 +157,7 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ data, lastUpdated,
         Giá trị nhập kho: ${formatCurrency(stats.globalImportValue)}.
         Giá trị xuất kho: ${formatCurrency(stats.globalExportValue)}.
         Top 3 mặt hàng giá trị nhất: ${stats.topItems.slice(0,3).map(i => i[0]).join(', ')}.
-        Hoạt động gần nhất: ${stats.recentActivities[0]?.ticket} (${stats.recentActivities[0]?.displayItems}).
+        Hoạt động gần nhất: ${stats.recentActivityCombined[0]?.ticket}.
       `;
 
       const response = await askGemini(chatInput, context, apiKey);
@@ -178,6 +190,55 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ data, lastUpdated,
       if (rank === 3) return <Medal className="w-5 h-5 text-amber-700 fill-amber-600 drop-shadow-sm" />;
       return <span className="w-5 h-5 flex items-center justify-center text-xs font-bold text-slate-400 bg-slate-100 rounded-full">{rank}</span>;
   };
+
+  const ActivityList = ({ items, type }: { items: any[], type: 'import' | 'export' }) => {
+      const isImport = type === 'import';
+      const colorClass = isImport ? 'emerald' : 'orange';
+      const Icon = isImport ? ArrowDownCircle : ArrowUpCircle;
+      const title = isImport ? 'Nhập Kho Gần Nhất' : 'Xuất Kho Gần Nhất';
+
+      return (
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex-1">
+             <div className="flex items-center justify-between mb-4">
+                <h3 className={`font-bold text-slate-800 flex items-center gap-2`}>
+                    <Icon className={`w-5 h-5 text-${colorClass}-500`} />
+                    {title}
+                </h3>
+             </div>
+             <div className="space-y-3">
+                 {items.length > 0 ? items.map((act, idx) => (
+                    <div key={idx} className="flex items-start p-3 bg-slate-50 rounded-xl hover:bg-white hover:shadow-md hover:border-blue-100 border border-transparent transition-all cursor-pointer group" onClick={() => onNavigate('print')}>
+                        <div className="mt-0.5 w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs shadow-sm shrink-0 mr-3">
+                            {idx + 1}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <p className="font-bold text-slate-800 text-sm">
+                                    {act.ticket}
+                                </p>
+                                <span className={`text-[10px] bg-${colorClass}-100 text-${colorClass}-700 px-1.5 py-0.5 rounded font-bold uppercase`}>
+                                    {isImport ? 'PN' : 'PX'}
+                                </span>
+                            </div>
+                            <p className="text-sm font-semibold text-slate-600 truncate mt-1" title={act.displayItems}>
+                                {act.displayItems}
+                            </p>
+                            {act.remaining > 0 && (
+                                <p className="text-xs text-slate-400 mt-1">
+                                    <span className="font-medium text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-sm">
+                                        +{act.remaining} thiết bị khác
+                                    </span>
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                 )) : (
+                     <div className="text-center py-6 text-slate-400 text-xs italic">Chưa có dữ liệu</div>
+                 )}
+             </div>
+        </div>
+      )
+  }
 
   // Helper cho biểu đồ giá trị
   const maxValue = Math.max(stats.globalImportValue, stats.globalExportValue) || 1;
@@ -321,56 +382,10 @@ export const DashboardHome: React.FC<DashboardHomeProps> = ({ data, lastUpdated,
                 </div>
             </div>
 
-            {/* RECENT ACTIVITY */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-                <div className="flex items-center justify-between mb-6">
-                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                        <TrendingUp className="w-5 h-5 text-emerald-500" />
-                        Hoạt Động Gần Nhất
-                    </h3>
-                    <button onClick={() => onNavigate('print')} className="text-sm text-blue-600 font-bold hover:underline flex items-center gap-1">
-                        Xem tất cả <ArrowRight className="w-4 h-4"/>
-                    </button>
-                </div>
-                
-                <div className="space-y-3">
-                    {stats.recentActivities.length > 0 ? (
-                        stats.recentActivities.map((act, idx) => (
-                            <div key={idx} className="flex items-start p-4 bg-slate-50 rounded-xl hover:bg-white hover:shadow-md hover:border-blue-100 border border-transparent transition-all cursor-pointer group" onClick={() => onNavigate('print')}>
-                                <div className="mt-0.5 w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs shadow-sm group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors shrink-0 mr-3">
-                                    {idx + 1}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <p className="font-bold text-slate-800 group-hover:text-blue-700 transition-colors text-sm">
-                                            {act.ticket}
-                                        </p>
-                                        {act.ticket.startsWith('PN') 
-                                            ? <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold">NHẬP</span>
-                                            : <span className="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold">XUẤT</span>
-                                        }
-                                        {/* NEW LOCATION FOR "Chi tiết" */}
-                                         <span className="text-[10px] bg-white border border-slate-200 text-slate-500 px-2 py-0.5 rounded-full font-medium group-hover:border-blue-200 group-hover:text-blue-600 transition-colors shadow-sm">
-                                            Chi tiết
-                                        </span>
-                                    </div>
-                                    <p className="text-sm font-semibold text-slate-600 truncate mt-1" title={act.displayItems}>
-                                        {act.displayItems}
-                                    </p>
-                                    {act.remaining > 0 && (
-                                        <p className="text-xs text-slate-400 mt-1">
-                                            <span className="font-medium text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-sm">
-                                                +{act.remaining} thiết bị khác
-                                            </span>
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        ))
-                    ) : (
-                        <div className="text-center py-10 text-slate-400">Chưa có dữ liệu phiếu</div>
-                    )}
-                </div>
+            {/* RECENT ACTIVITY - SPLIT VIEW */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                 <ActivityList items={stats.recentImports} type="import" />
+                 <ActivityList items={stats.recentExports} type="export" />
             </div>
         </div>
 

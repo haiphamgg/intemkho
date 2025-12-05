@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { DeviceRow } from '../types';
